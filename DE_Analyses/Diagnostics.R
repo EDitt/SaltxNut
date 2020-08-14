@@ -162,15 +162,19 @@ aggregate(experiment_inbred$Plant, by=list(experiment_inbred$Accession, experime
 # 4 reps: HA 412 HO Combo, RHA 373 Control, HA 445 Low Nutrient
 # everything else 5
 
-outliers <- c(37, 45, 56, 63, 186, 254, 261, 323, 335, 336)
+outliers <- c(37, 45, 63, 186, 254, 261, 323, 335, 336)
 experiment_inbred_noOut1 <- experiment_inbred[-which(experiment_inbred$Plant %in% outliers),] 
 aggregate(experiment_inbred_noOut1$Plant, by=list(experiment_inbred_noOut1$Accession, 
                                                   experiment_inbred_noOut1$Treatment), length)
-# 3 reps: HA 445 combo, HA 445 High Salt, RHA 373 High Salt
-# 56 makes 3 reps for RHA 373 High Salt (#323 is also RHA 373 high salt)
+# 3 reps: HA 445 combo, HA 445 High Salt
 
+# previously removed:
 #39 - RHA 373 Combo (currently 5 reps)
 #67 - RHA 274 High Salt (currently 5 reps)
-outliers <- c(37, 39, 45, 56, 63, 67, 186, 254, 261, 323, 335, 336)
 
+# also outlier
+#56 - RHA 373 Salt (currently 4 reps)
 
+head(experiment_inbred_noOut1)
+dim(experiment_inbred_noOut1) #104 x 47
+write.csv(experiment_inbred_noOut1, file.path("DataFiles/StudyDesign_Inbred_noOut.csv"), row.names=TRUE)

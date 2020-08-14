@@ -25,4 +25,15 @@
 - Removing 3 mislabelled samples, 6 with library sizes smaller than 7 M - 8 of these are outliers on dendrogram
 	- 37 mislabelled, dendrogram outlier; also PCA outlier
 	- 45 library size smaller than 5 M, dendrogram oulier
-	- 63 
+	- 63 library size smaller than 5 M, dendrogram + PCA outlier
+	- 186 library size smaller than 7 M, dendrogram outlier
+	- 254 library size smaller than 5 M, dendrogram + PCA outlier
+	- 261 library size smaller than 5 M, dendrogram + PCA outlier
+	- 323 mislabelled, dendrogram outlier
+	- 335 mislabelled, PCA outlier
+	- 336 library size smaller than 5 M, dendrogram + PCA outlier
+- Other possibilies (left in)
+	- 39 high SNP pairwise error, slight PCA outlier
+	- 56 dendrogram outlier
+	- 67 high SNP pairwise error, slight PCA outlier
+	- 224 slight dendrogram outlier
