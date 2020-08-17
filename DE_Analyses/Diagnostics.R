@@ -14,10 +14,6 @@ library(RColorBrewer)
 
 setwd("/scratch/eld72413/Salty_Nut/CultivatedOnly/DE_Analyses_Inbred")
 
-### To parallelize:
-library("BiocParallel")
-register(MulticoreParam(8)) #register cores so can specify parallel=TRUE when need to parallelize. Need to increase memory if increasing cores.
-#here I used 8 cores and 50 gb memory/core
 
 #############################
 ### LOAD SAMPLE METADATA ####
@@ -154,7 +150,7 @@ dev.off()
 
 
 ###############################
-########### REPS #############
+###### REMOVE OUTLIERS ########
 ###############################
 
 aggregate(experiment_inbred$Plant, by=list(experiment_inbred$Accession, experiment_inbred$Treatment), length)
@@ -176,5 +172,6 @@ aggregate(experiment_inbred_noOut1$Plant, by=list(experiment_inbred_noOut1$Acces
 #56 - RHA 373 Salt (currently 4 reps)
 
 head(experiment_inbred_noOut1)
-dim(experiment_inbred_noOut1) #104 x 47
-write.csv(experiment_inbred_noOut1, file.path("DataFiles/StudyDesign_Inbred_noOut.csv"), row.names=TRUE)
+dim(experiment_inbred_noOut1) #104 x 48
+#write.csv(experiment_inbred_noOut1, file.path("DataFiles/StudyDesign_Inbred_noOut.csv"))
+write.csv(experiment_inbred_noOut1, "StudyDesign_Inbred_noOut.csv", row.names=FALSE)

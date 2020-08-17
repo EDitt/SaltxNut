@@ -8,9 +8,6 @@
 
 library(DESeq2)
 library(tximport)
-library(ggplot2)
-library(pheatmap)
-library(RColorBrewer)
 
 setwd("/scratch/eld72413/Salty_Nut/CultivatedOnly/DE_Analyses_Inbred")
 
@@ -25,31 +22,16 @@ register(MulticoreParam(8)) #register cores so can specify parallel=TRUE when ne
 
 ### Experimental Data
 #open up grouping file
-experiment <- read.csv("StudyDesign.csv", header=T)
-
-### Subset to include only cultivated HA + RHA samples inbred samples
-experiment_inbred <- subset(experiment, Group == "HA" | Group == "RHA") #113
-experiment_inbred <- droplevels(experiment_inbred)
-dim(experiment_inbred)
-
-outliers <- c(37, 45, 63, 186, 254, 261, 323, 335, 336)
-
-experiment_inbred_noOut1 <- experiment_inbred[-which(experiment_inbred$Plant %in% outliers),] #104
-rownames(experiment_inbred_noOut1) <- experiment_inbred_noOut1$Plant
-
-metadata_red <- experiment_inbred_noOut1[,c(1,8,14,17)]
-write.csv(metadata_red, "Metadata_forNiki.csv")
+experiment_InbrednoOut <- read.csv("StudyDesign_Inbred_noOut.csv", header=T)
+head(experiment_InbrednoOut)
 
 #############################
 # IMPORT DATA WITH TXIMPORT #
 #############################
 
-# Directory containing the .genes.results files,
-#setwd("/scratch/eld72413/Salty_Nut/CultivatedOnly/DE_Analyses/RSEMOut_Files")
-
 # create vector pointing to quantification files - vector of filenames that contains sample IDs and combine with
-files_cult <- file.path("/scratch/eld72413/Salty_Nut/CultivatedOnly/DE_Analyses/RSEMOut_Files", paste0("RSEMOut_", experiment_inbred_noOut1$Plant, ".merged_.genes.results"))
-names(files_cult) <- experiment_inbred_noOut1$Plant #assign sampleIDs
+files_cult <- file.path("/scratch/eld72413/Salty_Nut/CultivatedOnly/DE_Analyses/RSEMOut_Files", paste0("RSEMOut_", experiment_InbrednoOut$Plant, ".merged_.genes.results"))
+names(files_cult) <- experiment_InbrednoOut$Plant #assign sampleIDs
 
 all(file.exists(files_cult)) #make sure files actually exist (=TRUE)
 
@@ -58,7 +40,7 @@ head(txi.rsem.cult$counts)
 dim(txi.rsem.cult$counts) #78260 x 104
 
 #Save this R object
-#save(txi.rsem.cult, file = "txi.rsem.cult.RData")
+save(txi.rsem.cult, file = "txi.rsem.cult_InbrednoOut.RData")
 
 
 ###############################
@@ -66,51 +48,87 @@ dim(txi.rsem.cult$counts) #78260 x 104
 ###############################
 
 ### Variables
-experiment_inbred_noOut1$SampleDay<-factor(experiment_inbred_noOut1$SampleDay) #day sampled 1-2
-experiment_inbred_noOut1$Cross<-factor(experiment_inbred_noOut1$Cross) #1,2,3
+experiment_InbrednoOut$SampleDay<-factor(experiment_InbrednoOut$SampleDay) #day sampled 1-2
+experiment_InbrednoOut$Cross<-factor(experiment_InbrednoOut$Cross) #1,2,3
 
 ### Variables of interest:
-levels(experiment_inbred_noOut1$Treatment)
-experiment_inbred_noOut1$Treatment <- relevel(experiment_inbred_noOut1$Treatment, ref="Control") #relevel to make Control reference
-experiment_inbred_noOut1$Accession<-as.factor(make.names(experiment_inbred_noOut1$Accession))  #make syntactically valid names (no characters R doesn't like)
-levels(experiment_inbred_noOut1$Accession)
-levels(experiment_inbred_noOut1$Group) #HA, RHA
+levels(experiment_InbrednoOut$Treatment)
+experiment_InbrednoOut$Treatment <- relevel(experiment_InbrednoOut$Treatment, ref="Control") #relevel to make Control reference
+experiment_InbrednoOut$Accession<-as.factor(make.names(experiment_InbrednoOut$Accession))  #make syntactically valid names (no characters R doesn't like)
+levels(experiment_InbrednoOut$Accession)
+levels(experiment_InbrednoOut$Group) #HA, RHA
 
 ### Other variables to account for:
-levels(experiment_inbred_noOut1$Reproductive) #whether plant was reproductive when sampled
+levels(experiment_InbrednoOut$Reproductive) #whether plant was reproductive when sampled
 
 
 ## make DESeq2 data object:
 ddsTxi_cult <- DESeqDataSetFromTximport(txi.rsem.cult,
-                                        colData = experiment_inbred_noOut1,
+                                        colData = experiment_InbrednoOut,
                                         design = ~ 0 + Group + Group:Cross + SampleDay + Reproductive + Treatment)
 ddsTxi_cult #dim is 78260 x 104
+
 ### Pre-filtering to reduce size of data object:
 keep <- rowSums(counts(ddsTxi_cult) >= 1) >= 3 ### at least 3 samples have a count of 1 or higher
 length(which(keep==1)) #55,728
 ddsTxi_cult_red <- ddsTxi_cult[keep,]
 dim(ddsTxi_cult_red) #55728 x 104
 
+save(ddsTxi_cult_red, file = "ddsTxi_cult_red.RData")
 
 
-### For Niki
-head(assay(ddsTxi_cult_red), 3)
+###############################
+######## DE ANALYSES ##########
+###############################
 
+### Need to parallelize due to complex design and many samples (use parallel = TRUE)
 
-transform <- t(assay(ddsTxi_cult_red))
-write.csv(transform, "GeneCounts_forNiki.csv")
+# run DESEQ2 analysis:
+dds_cult <- DESeq(ddsTxi_cult_red, parallel = TRUE) 
+# this does all steps: 
+# estimate size factors (to control for library size diffs) - here it's using info from avgTxLength
+# estimate dispersion for each gene
+# fit glm
+# returns DESeqDataSet which contains all the fitted info within it
 
-## Variance stabilizing transformation
-vsd <- vst(txi.rsem.cult, blind = FALSE) #return a DESeqTransform object. Transformed values are no longer counts. The colData attaached to dds is still accessible
-# using blind=FALSE means that variables in design will not contribute to the expected variance-mean trend of the exp. 
-# The design is not used directly in the transformation, only in estimating the global amount of variability in the counts
-# Use blind = TRUE for a fully unsupervised transformation
-# sequencing depth correction is done automatically with this function
+# save as R object
+save(dds_cult, file = "dds_cult.RData")
 
-head(assay(vsd), 3)
+###############################
+###### EXTRACT RESULTS ########
+###############################
 
-vsd <- vst(ddsTxi_cult, blind = TRUE)
+#load("dds_cult.RData")
+resultsNames(dds_cult) ## the elements of results to be extracted
 
-png("PCA_wlabels_Unsupervised.png")
-p + geom_text(aes(label=name))
-dev.off()
+results_Combo <- results(dds_cult, alpha = 0.05, name="TreatmentCombo")
+results_Salt <- results(dds_cult, alpha = 0.05, name="TreatmentHighSalt")
+results_Nut <- results(dds_cult, alpha = 0.05, name="TreatmentLowNut")
+
+#significant differences between each treatment and combo-
+# these take longer and should parallelize to run
+results_Salt_vs_Combo <- results(dds_cult, contrast=c("Treatment","HighSalt","Combo"), alpha = 0.05, parallel=TRUE)
+results_Nut_vs_Combo <- results(dds_cult, contrast=c("Treatment","LowNut","Combo"), alpha = 0.05, parallel=TRUE)
+results_Nut_vs_Salt <- results(dds_cult, contrast=c("Treatment","LowNut","HighSalt"), alpha = 0.05, parallel=TRUE)
+
+### summarize basic tallies
+summary(results_Salt_vs_Combo) #2.6 % up, 3.2% down
+summary(results_Nut_vs_Combo) #9.6% up, 11% down
+
+write.csv(as.data.frame(results_Combo), 
+          file="condition_comboDE_results.csv")
+
+write.csv(as.data.frame(results_Salt), 
+          file="condition_saltDE_results.csv")
+
+write.csv(as.data.frame(results_Nut), 
+          file="condition_nutDE_results.csv")
+
+write.csv(as.data.frame(results_Salt_vs_Combo), 
+          file="Salt_vs_Combo_results.csv")
+
+write.csv(as.data.frame(results_Nut_vs_Combo), 
+          file="Nut_vs_Combo_results.csv")
+
+write.csv(as.data.frame(results_Nut_vs_Salt), 
+          file="Nut_vs_Salt_results.csv")
