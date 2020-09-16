@@ -1,4 +1,4 @@
-#qsub -I -q s_interq -l walltime=4:00:00 -l nodes=1:ppn=8 -l mem=50gb
+
 #module load R/3.6.1-foss-2018a-X11-20180131-GACRC
 #R
 
