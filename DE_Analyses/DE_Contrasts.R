@@ -8,8 +8,8 @@ source("Functions.R")
 library(UpSetR)
 
 
-#library(viridis)
-#library(RColorBrewer)
+library(viridis)
+library(RColorBrewer)
 
 
 
@@ -34,6 +34,8 @@ lapply(SigOverlap, function(x) {length(x$Gene)}) # numbers for Venn Diagram
 # 1039 Combo only (4%), 8636 Nut only (36%), 2018 salt only (8%)
 #23,791 total
 
+save(DEData, SigOverlap, SigDiffOverlap, file="ResultsFiles/Overlap.RData")
+
 #########################
 ###### UPSET PLOT #######
 #########################
@@ -41,6 +43,14 @@ lapply(SigOverlap, function(x) {length(x$Gene)}) # numbers for Venn Diagram
 SigOverlap_Graph <- lapply(my_dataSig, function(x) {x$Gene})
 
 upset(fromList(SigOverlap_Graph),
+      #keep.order = TRUE,
+      order.by = "freq",
+      #group.by = "sets", 
+      nsets = 13,
+      #empty.intersections = "on",
+      nintersects = 20)
+
+upset(fromList(SigOverlap_Graph[c(1:3)]),
       #keep.order = TRUE,
       order.by = "freq",
       #group.by = "sets", 

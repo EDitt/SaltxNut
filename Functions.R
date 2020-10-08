@@ -126,6 +126,56 @@ Prioritized <- function (Diff, OverlapUp, BothUp_Col, OverlapDown, BothDown_Col)
   return(my_list)
 }
 
+DirectionDf <- function(dataset, Yvar, Xvar) {
+  Dir1 <- dataset[which(dataset[,Xvar] > 0 &
+                          dataset[,Yvar] < 0),]
+  Dir2 <- dataset[which(dataset[,Xvar] < 0 &
+                          dataset[,Yvar] > 0),]
+  DirGenes <- union(Dir1$Gene, Dir2$Gene)
+  ReducedGenes <- setdiff(dataset[which(abs(dataset[,Xvar]) >
+                                          abs(dataset[,Yvar])),"Gene"], 
+                          DirGenes)
+  ReducedData <- dataset[which(dataset$Gene %in% ReducedGenes),]
+  IncreasedGenes <- setdiff(dataset[which(abs(dataset[,Xvar]) <
+                                            abs(dataset[,Yvar])),"Gene"], 
+                            DirGenes)
+  IncreasedData <- dataset[which(dataset$Gene %in% IncreasedGenes),]
+  Yname <- deparse(substitute(Yvar))
+  Xname <- deparse(substitute(Xvar))
+  MyList <- list("Down" = Dir1,
+                 "Up" = Dir2,
+                 "Reduced" = ReducedData,
+                 "Increased" = IncreasedData)
+  return (MyList)
+}
+
+#########################
+##### REGRESSION #####
+#########################
+
+Predictdf <- function(dataset, geneset, Yvar, Xvar) {
+  dfSubset <- dataset[which(dataset$Gene %in% geneset),]
+  Mod <- lm(dfSubset[,Yvar] ~ dfSubset[,Xvar])
+  sum<-summary(Mod)
+  residSE <- sum$sigma
+  dfPredict <- as.data.frame(predict(Mod, level=0.95, interval= 'prediction'))
+  dfConfid <- as.data.frame(predict(Mod, level=0.95, interval= 'confidence'))
+  colnames(dfConfid) <- c("CI_fit", "CI_lower", "CI_upper")
+  resid <- resid(Mod)
+  dfSubsetPredict <- cbind(dfSubset, resid, dfPredict, dfConfid)
+  dfSubsetPredict$Interval <- ifelse(dfSubsetPredict[,Yvar] < 
+                                       dfSubsetPredict$lwr |
+                                       dfSubsetPredict[,Yvar] > 
+                                       dfSubsetPredict$upr, "Outside", "Within")
+  dfSubsetPredict$ResidSE_Interval <- ifelse(abs(dfSubsetPredict$resid) > 
+                                               residSE, "Outside", "Within")
+  dfSubsetPredict$CI <- ifelse(dfSubsetPredict[,Yvar] < 
+                                       dfSubsetPredict$CI_lower |
+                                       dfSubsetPredict[,Yvar] > 
+                                       dfSubsetPredict$CI_upper, "Outside", "Within")
+  return (dfSubsetPredict)
+}
+
 #########################
 ##### GO ENRICHMENT #####
 #########################
