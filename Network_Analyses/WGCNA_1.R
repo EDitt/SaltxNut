@@ -13,7 +13,7 @@ setwd("/scratch/eld72413/Salty_Nut/CultivatedOnly/DE_Analyses_Inbred")
 library(DESeq2)
 library(tximport)
 library(WGCNA)
-#library(sva)
+source("Functions.R")
 
 ### To parallelize:
 library("BiocParallel")

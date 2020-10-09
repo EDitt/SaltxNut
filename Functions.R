@@ -202,6 +202,31 @@ GO_Enrichment <- function (AllGenes, DE_Genes, LengthTable, GO_Terms) {
 ##### COEXPRESSION ######
 #########################
 
+# function to vary "deepSplit" and "pamStage" paramter:
+
+Module_ID <- function(dataframe, GeneTree, TOMdiss, split, pam, minModuleSize) {
+dynamicMods = cutreeDynamic(dendro = GeneTree, distM = TOMdiss,
+              method = "hybrid",
+              #cutHeight = , default for "hybrid" is 99% of range between 5th percentile and joining heights of dendrogram
+                            deepSplit = split,  #from 0-4
+                            pamRespectsDendro = FALSE,
+                            minClusterSize = minModuleSize,
+                            pamStage = pam)
+Mods_Genes <- as.data.frame(table(dynamicMods))
+UnAssigned <- ifelse(Mods_Genes[1,1] == 0, Mods_Genes[1,2], "NA")
+Mods_Genes_noZero <- subset(Mods_Genes, Mods_Genes[,1]!=0)
+dynamicColors = labels2colors(dynamicMods)
+MEList = moduleEigengenes(dataframe, colors = dynamicColors)
+datVA <- MEList$varExplained
+df <- data.frame(matrix(unlist(datVA ), nrow=length(datVA), byrow=T))
+df_noMin <- subset(df, df[,1] != min(df[,1]))  # for values that don't include "Grey" modules
+ValueList <- data.frame("NumMods" = length(Mods_Genes_noZero$Freq), "NumUnAssigned" = UnAssigned, 
+  "MeanGeneNum" = mean(Mods_Genes_noZero[,2]), "MinGeneNum" = min(Mods_Genes_noZero[,2]),  
+  "MaxGeneNum" = max(Mods_Genes_noZero[,2]), "MeanVarExp" = mean(df[,1]), "MeanVarExp_noMin" = mean(df_noMin[,1]),
+  "MinVarExp" = min(df[,1]), "MinVarExp_noMin" = min(df_noMin[,1]),  "MaxVarExp" = max(df[,1]))
+return(ValueList)
+}
+
 Module_Cluster <- function(MEDissThres, datExpr, dynamicColors) {
   merge = mergeCloseModules(datExpr, dynamicColors, cutHeight = MEDissThres, verbose = 3)
   mergedMEs = merge$newMEs
@@ -215,3 +240,13 @@ Module_Cluster <- function(MEDissThres, datExpr, dynamicColors) {
   Result <- data.frame(Metric, Value)
   return(Result)
 }
+
+# Function to look at Module-Trait Correlations
+Module_Trait_Corr <- function(TraitData, model, modEigenvalues, NumSamples) {
+  datTraits <- as.data.frame(model.matrix(model, data=TraitData))
+  moduleTraitCor = cor(modEigenvalues, datTraits, use = "p")
+  moduleTraitPvalue = corPvalueStudent(moduleTraitCor, NumSamples)
+  result = list(Traits = datTraits, ModTraitCorr = moduleTraitCor, ModTraitP = moduleTraitPvalue)
+  return(result)
+}
+
