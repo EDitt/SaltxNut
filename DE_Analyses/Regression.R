@@ -172,7 +172,8 @@ pDiff + geom_point() +
 pSN <- ggplot(data=All_PLvalues[which(All_PLvalues$Gene %in% AllDiffs),], 
               aes(x=condition_saltDE_results.log2FoldChange, 
                   y=condition_nutDE_results.log2FoldChange))
-pSN + geom_point() 
+pSN + geom_point()
+
 #########################
 ##### SALT DOMINANT #####
 #########################

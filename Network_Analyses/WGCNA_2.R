@@ -299,8 +299,11 @@ save(MEs, moduleLabels, moduleColors, geneTree, file = "ModuleFiles_100820.RData
 
 ### module expression and eigengene info
 write.csv(MEs, file = "ModEigengenes_pamTRUE.csv")
+# module eigengene is the first principal component of the expression matrix. The eigengene 
+# can be thought of as a weighted average expression profile
 
 MExp0 = moduleEigengenes(datExpr_red, moduleColors)$averageExpr
+# averageExpr is a df containing average normalized expression in each module
 
 MExp = orderMEs(MExp0) #not sure how these are ordered?
 #write.csv(MExp, file = "ModExpression_pamFALSE.csv")
