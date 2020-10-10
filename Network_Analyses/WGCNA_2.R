@@ -110,7 +110,7 @@ TOM = TOMsimilarity(adjacency)
 
 save(TOM, file = "TOM_Inbred.RData")
 
-#load("TOM_Inbred.RData")
+load("TOM_Inbred.RData")
 
 # calculate corresponding dissimilarity
 dissTOM = 1-TOM
@@ -167,17 +167,18 @@ write.csv(df_module_results, 'TreeCutVary.csv')
 ### MODULE IDENTIFICATION ###
 #############################
 
-# deepSplit = 3, pamStage=TRUE
+# deepSplit = 3 (4), pamStage=TRUE
 
 minModuleSize = 30
 # branch cutting methods include constant-height or Dynamic Branch cut
 
 # Module identification using dynamic tree cut:
 dynamicMods = cutreeDynamic(dendro = geneTree, distM = dissTOM,
-                            deepSplit = 3, pamRespectsDendro = FALSE,
+                            deepSplit = 4, pamRespectsDendro = FALSE,
                             minClusterSize = minModuleSize,
                             pamStage = TRUE)
-table(dynamicMods) # N=97
+table(dynamicMods) # 118
+# (N=97 with deepSplit = 3)
 
 
 # Convert numeric lables into colors
@@ -202,7 +203,7 @@ MEList = moduleEigengenes(datExpr_red, colors = dynamicColors)
 MEs = MEList$eigengenes
 MEList$varExplained
 
-# Mean % Var Explained = 0.4928
+# Mean % Var Explained = 0.4966 (0.4928 deepSplit3)
 mean(data.frame(matrix(unlist(MEList$varExplained), nrow=length(MEList$varExplained), byrow=T))[,1])
 
 # Calculate dissimilarity of module eigengenes
@@ -212,7 +213,7 @@ MEDiss = 1-cor(MEs)
 METree = hclust(as.dist(MEDiss), method = "average")
 
 # Plot the result
-pdf(file = "ModuleCluster_PAMstageTRUE_split3.pdf", width = 16, height = 8)
+pdf(file = "ModuleCluster_PAMstageTRUE_split4.pdf", width = 16, height = 8)
 plot(METree, main = "Clustering of module eigengenes",
      xlab = "", sub = "")
 MEDissThres = 0.25  ### height cut of 0.25, corresponds to correlation of 0.75 (figure)
@@ -250,7 +251,7 @@ for (i in 1:length(Threshold)) {
   df_module_results$MaxVarExp[i] = mod_result[7,2]
 }
 
-write.csv(df_module_results, 'VariableCutThreshold_PAMTRUE.csv')
+write.csv(df_module_results, 'VariableCutThreshold_PAMTRUE_split4.csv')
 
 ### cutting at 0.20 maximizes the minimum % variance explained by a module
 ## average % var explained goes from 0.492 -> 0.482. Ave # genes ~ 327
@@ -292,6 +293,15 @@ dim(MEs) # 102 x 71
 
 # Save module colors and labels for use in subsequent parts
 save(MEs, moduleLabels, moduleColors, geneTree, file = "ModuleFiles_100820.RData")
+
+#############################
+###### IF NOT MERGING #######
+#############################
+
+moduleColors = dynamicColors
+colorOrder = c("grey", standardColors(50))
+moduleLabels = match(moduleColors, colorOrder)-1
+dim(MEs) # 102 x 118  (already defined)
 
 #############################
 #### OUTPUT MODULE INFO #####
