@@ -60,7 +60,8 @@ ggsave(filename = "Network_Analyses/PreProcess/ModuleIDparameters.png")
 ###################################
 
 ### For pam=TRUE module
-ModuleClustParameter <- read.csv("Network_Analyses/PreProcess/VariableCutThreshold_PAMTRUE.csv", header=T)
+#ModuleClustParameter <- read.csv("Network_Analyses/PreProcess/deepSplit3_merged0.2/VariableCutThreshold_PAMTRUE.csv", header=T)
+ModuleClustParameter <- read.csv("Network_Analyses/PreProcess/deepSplit4/VariableCutThreshold_PAMTRUE_split4.csv", header=T)
 
 head(ModuleClustParameter)
 
@@ -82,4 +83,4 @@ p4g + geom_line(data = ModuleClustParameter, aes(y=ConvertModNum), lty=2) +
   scale_y_continuous(sec.axis = sec_axis(~ .*100, name= "Num Modules"))
 
 
-ggsave(filename = "Network_Analyses/PreProcess/ModuleClustCut.png")
+ggsave(filename = "Network_Analyses/PreProcess/deepSplit4/ModuleClustCut.png")
