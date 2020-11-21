@@ -19,14 +19,24 @@ library(RColorBrewer)
 ###### READ DATA ########
 #########################
 
-ModEGs <- read.csv("ResultsFiles/Coexpression/Mods118/ModEigengenes_pamTRUE.csv", header=T)
+ModEGs <- read.csv("ResultsFiles/Coexpression/deepSplit4/ModEigengenes_pamTRUE.csv", header=T)
 colnames(ModEGs)[1] <- "Plant"
 
-ModExp <- read.csv("ResultsFiles/Coexpression/Mods118/ModExpression_pamTRUE.csv", header=T)
+ModExp <- read.csv("ResultsFiles/Coexpression/deepSplit4/ModExpression_pamTRUE.csv", header=T)
 colnames(ModExp)[1] <- "Plant"
 
 Design <- read.csv("DataFiles/StudyDesign_Inbred_noOut.csv", header=T)
 
+Design$Treatment <- relevel(Design$Treatment, ref="Control")
+
+levels(Design$Treatment)
+levels(Design$Accession)
+levels(Design$Group)
+Design$Cross <- factor(Design$Cross)
+Design$SampleDay <- factor(Design$SampleDay)
+
+## samples per accssion:
+aggregate(Design$Plant, by=list(Design$Accession, Design$Treatment), length)
 
 #########################
 ###### DATA SETUP #######
@@ -35,22 +45,9 @@ Design <- read.csv("DataFiles/StudyDesign_Inbred_noOut.csv", header=T)
 AllData <- merge(Design[,c(2:8, 14, 17, 18, 23, 33, 42, 43)], ModEGs, by="Plant")
 str(AllData)
 
-AllData$Treatment <- relevel(AllData$Treatment, ref="Control")
-
-levels(AllData$Treatment)
-levels(AllData$Accession)
-levels(AllData$Group)
-AllData$Cross <- factor(AllData$Cross)
-AllData$SampleDay <- factor(AllData$SampleDay)
-
-Mods <- colnames(AllData[,c(15:85)])
-
-## samples per accssion:
-aggregate(AllData$Plant, by=list(AllData$Accession, AllData$Treatment), length)
-
 # convert to wide format:
 AllData_long <- gather(AllData, Module, eigengeneExp, 
-                       MEantiquewhite2:MEyellowgreen, factor_key = TRUE)
+                       MEgreen4:MEthistle1, factor_key = TRUE)
 head(AllData_long)
 
 #########################
@@ -67,6 +64,7 @@ EigenExp <- lm(eigengeneExp ~ Treatment + Group +
                data = AllData_long)
 Anova(EigenExp) 
 drop1(EigenExp, test = "F") # reproductive is n.s.
+hist(resid(EigenExp))
 
 EigenMean <- emmeans(EigenExp, ~ Treatment | Module, type = "response")
 EigenMean
@@ -75,7 +73,7 @@ pairwisediffs_df <- as.data.frame(pairwisediffs)
 length(pairwisediffs_df$contrast)
 
 pairwisediffs_df$sig <- ifelse(pairwisediffs_df$p.value < 0.05, "Sig", "NS")
-length(which (pairwisediffs_df$sig == "Sig")) #208
+length(which (pairwisediffs_df$sig == "Sig")) #108 (208 before merging similar modules)
 aggregate(pairwisediffs_df$contrast, 
           by=list(pairwisediffs_df$contrast, pairwisediffs_df$sig), length)
 
@@ -90,25 +88,39 @@ Mod_overlap <- GeneSets(Sig_Contrasts$`Control - Combo`$Module,
                         Sig_Contrasts$`Control - HighSalt`$Module,
                         Sig_Contrasts$`Control - LowNut`$Module)
 lapply(Mod_overlap, function(x) {length(x)})
-# In common all: 9
-# DE Combo + DE High Salt: 7
-# DE High Salt + DE Low Nut: 7
-# DE Combo + DE Low Nut: 12
-# DE Combo only: 2
-# DE High Salt only: 4
-# DE Low Nut only: 29
+# In common all: 4 (no pairwise differences)
+# DE Combo + DE High Salt: 6
+# DE High Salt + DE Low Nut: 2 (not different)
+# DE Combo + DE Low Nut: 5
+# DE Combo only: 1
+# DE High Salt only: 3
+# DE Low Nut only: 19
 
 Mod_overlap2 <- GeneSets(Sig_Contrasts$`Combo - HighSalt`$Module,
                         Sig_Contrasts$`Combo - LowNut`$Module,
                         Sig_Contrasts$`HighSalt - LowNut`$Module)
 lapply(Mod_overlap2, function(x) {length(x)})
-# In common all: 9
+# In common all: 1
 # Combo-High Salt & Combo-Low Nut: 0
-# Combo-Low Nut & High Salt - Low Nut: 20
-# Combo-High Salt & High Salt-Low Nut: 7
+# Combo-Low Nut & High Salt - Low Nut: 15
+# Combo-High Salt & High Salt-Low Nut: 3
 # Combo-High Salt only: 1
 # Combo-Low Nut only: 0
-# High Salt-Low Nut only: 12
+# High Salt-Low Nut only: 7
+
+#########################
+#### MULTIVARIATE #######
+#########################
+# https://data.library.virginia.edu/getting-started-with-multivariate-multiple-regression/
+#mods <- list(colnames(AllData[,15:100]))
+
+mlm1 <- lm(do.call(cbind, AllData[,c(15:100)]) ~ Treatment + Group + 
+             Group:Accession + 
+             Reproductive +
+             SampleDay, data = AllData)
+summary(mlm1)
+Anova(mlm1)
+head(vcov(mlm1))
 
 #########################
 ###### UPSET PLOT #######
@@ -119,9 +131,9 @@ DE_Mods <- union(Sig_Contrasts$`Control - Combo`$Module,
                  union(Sig_Contrasts$`Control - HighSalt`$Module, Sig_Contrasts$`Control - LowNut`$Module))
 
 # only take the modules that intersect with the above (don't care about pairwise contrasts if not diff from control)
-Contrasts_Graph <- lapply(Sig_Contrasts, function(x) {intersect(x$Module, DE_Mods)})
+Contrasts_DE <- lapply(Sig_Contrasts, function(x) {intersect(x$Module, DE_Mods)})
 
-upset(fromList(Contrasts_Graph),
+upset(fromList(Contrasts_DE),
       #keep.order = TRUE,
       order.by = "freq",
       #group.by = "sets", 
@@ -163,35 +175,34 @@ head(Sig_Mods_df_treatwide)
 # All shared- shared by all treatments, not different
 Pairwise_diffs <- union(Sig_Contrasts$`Combo - HighSalt`$Module, 
                         union(Sig_Contrasts$`Combo - LowNut`$Module,
-                              Sig_Contrasts$`HighSalt - LowNut`$Module)) # N=49
+                              Sig_Contrasts$`HighSalt - LowNut`$Module)) # N=27
 
-All_shared <- setdiff(Mod_overlap$InCommonAll, Pairwise_diffs) #8 of 9 modules shared are not different from one another
-# remaining shared module is the same between combo/salt (both diff with nutrient)
-All_shared_NutDiff <- intersect(Mod_overlap$InCommonAll, Pairwise_diffs) #1
+All_shared <- setdiff(Mod_overlap$InCommonAll, Pairwise_diffs) #4 of 4 modules shared are not different from one another
+#All_shared_NutDiff <- intersect(Mod_overlap$InCommonAll, Pairwise_diffs) #0
 
 # Unconditional nutrient/salt - shared by nutrient/salt + combo, not different
 Uncond_Nut <- setdiff(Mod_overlap$"Sig_Contrasts$`Control - Combo`$ModuleSig_Contrasts$`Control - LowNut`$ModuleOnly",
-                        Sig_Contrasts$`Combo - LowNut`$Module) # 5 of the 12 Nut-Combo Mods are not different
+                        Sig_Contrasts$`Combo - LowNut`$Module) # 2 of the 5 Nut-Combo Mods are not different
 
 Uncond_Salt <- setdiff(Mod_overlap$"Sig_Contrasts$`Control - Combo`$ModuleSig_Contrasts$`Control - HighSalt`$ModuleOnly",
-                      Sig_Contrasts$`Combo - HighSalt`$Module) # 7 of the 7 Salt-Combo Mods are not different
+                      Sig_Contrasts$`Combo - HighSalt`$Module) # 6 of the 6 Salt-Combo Mods are not different
 
 # shared by nutrients + combo, different
 Cond_Nut <- intersect(Mod_overlap$"Sig_Contrasts$`Control - Combo`$ModuleSig_Contrasts$`Control - LowNut`$ModuleOnly",
-                      Sig_Contrasts$`Combo - LowNut`$Module) # N=7
+                      Sig_Contrasts$`Combo - LowNut`$Module) # N=3
 
 # only significant in nutrient
-Nut_only <- Mod_overlap$"Sig_Contrasts$`Control - LowNut`$ModuleOnly" # N=29
+Nut_only <- Mod_overlap$"Sig_Contrasts$`Control - LowNut`$ModuleOnly" # N=19
 # only significant in salt
-Salt_only <- Mod_overlap$"Sig_Contrasts$`Control - HighSalt`$ModuleOnly" #N=4
+Salt_only <- Mod_overlap$"Sig_Contrasts$`Control - HighSalt`$ModuleOnly" #N=3
 # only significant in combo
-Combo_only <- Mod_overlap$"Sig_Contrasts$`Control - Combo`$ModuleOnly" #N=2
+Combo_only <- Mod_overlap$"Sig_Contrasts$`Control - Combo`$ModuleOnly" #N=1
 
 Nut_Salt_same <- setdiff(Mod_overlap$"Sig_Contrasts$`Control - HighSalt`$ModuleSig_Contrasts$`Control - LowNut`$ModuleOnly",
-                         Sig_Contrasts$`HighSalt - LowNut`$Module) #3
+                         Sig_Contrasts$`HighSalt - LowNut`$Module) #2
 
 Nut_Salt_diff <- intersect(Mod_overlap$"Sig_Contrasts$`Control - HighSalt`$ModuleSig_Contrasts$`Control - LowNut`$ModuleOnly",
-                         Sig_Contrasts$`HighSalt - LowNut`$Module) #4
+                         Sig_Contrasts$`HighSalt - LowNut`$Module) #0
 
 Sig_Mods_df_treatwide$cat <- ifelse(Sig_Mods_df_treatwide$Module %in% All_shared, "All_shared",
                                     ifelse(Sig_Mods_df_treatwide$Module %in% All_shared_NutDiff, "All_shared_NutDiff", 
@@ -224,14 +235,15 @@ pmod + geom_point(aes(fill=cat, shape=cat, color = cat), size = 3, stroke = 1) +
                               24, 24,
                               19, 19))
 
+# Lots of nutrient (or conditional nutrient) only that appear in opposite direction in salt
+
+
 #########################
 #### PCA EXPRESSION #####
 #########################
 
 head(ModExp)
 
-#AllExp <- merge(Design[,c(2, 8, 14, 17)], ModExp, by="Plant")
-#str(AllExp)
 rownames(ModExp) <- ModExp$Plant
 head(ModExp[,-1])
 PCA <- prcomp(ModExp[,-1])
@@ -245,6 +257,15 @@ AllExpPCA <- merge(Design[,c(2, 8, 14, 17)], PCA_df[,c(1,2,103)], by="Plant")
 p1 <- ggplot(data=AllExpPCA, aes(x=PC1, y=PC2))
 
 p1 + geom_point(aes(color = Treatment, shape = Group))
+
+
+#########################
+#### PLOT EXPRESSION ####
+#########################
+
+head(DE_Mods)
+AllExp <- merge(Design[,c(2, 8, 14, 17)], ModExp, by="Plant")
+str(AllExp)
 
 
 
