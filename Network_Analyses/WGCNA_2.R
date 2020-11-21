@@ -277,8 +277,8 @@ plotDendroAndColors(geneTree, cbind(dynamicColors, mergedColors),
                     addGuide = TRUE, guideHang = 0.05)
 dev.off()
 
-table(dynamicColors) #N=97
-table(mergedColors) # N=71 (at 0.2)
+table(dynamicColors) #N=118 (97 with deepSplit3)
+table(mergedColors) # N=86 (71 with deepSplit3) (at 0.2)
 
 
 ### To use merged module colors, save relevant variables
@@ -289,10 +289,11 @@ moduleColors = mergedColors
 colorOrder = c("grey", standardColors(50))
 moduleLabels = match(moduleColors, colorOrder)-1
 MEs = mergedMEs
-dim(MEs) # 102 x 71
+dim(MEs) # 102 x 71/86
 
 # Save module colors and labels for use in subsequent parts
-save(MEs, moduleLabels, moduleColors, geneTree, file = "ModuleFiles_100820.RData")
+save(MEs, moduleLabels, moduleColors, geneTree, file = "ModuleFiles_100820.RData") #deepSplit3
+save(MEs, moduleLabels, moduleColors, geneTree, file = "ModuleFiles_101020.RData") #deepSplit4
 
 #############################
 ###### IF NOT MERGING #######

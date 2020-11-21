@@ -88,9 +88,10 @@ MEs = orderMEs(MEs0)
 
 length(metadata_cult$Plant)
 
-TreatmentMod <- ~ 0 + Treatment
+#TreatmentMod <- ~ 0 + Treatment
+FullMod <- ~ 0 + Treatment + Group + Group:Accession + Reproductive + SampleDay
 
-Treatments <- Module_Trait_Corr(metadata_cult_red, TreatmentMod, MEs, nSamples)
+Treatments <- Module_Trait_Corr(metadata_cult_red, FullMod, MEs, nSamples)
 
 pdf(file = "Treatments_pamStageTrue.pdf", width = 8, height = 8);
 # Will display correlations and their p-values
