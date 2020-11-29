@@ -149,6 +149,39 @@ DirectionDf <- function(dataset, Yvar, Xvar) {
   return (MyList)
 }
 
+# a function to return lists of shared genes that are significantly different (and aren't)
+Compare_shared <- function(SharedOverlap, PairwiseDiffs) {
+  Shared_same <- setdiff(SharedOverlap, PairwiseDiffs)
+  Shared_diff <- intersect(SharedOverlap, PairwiseDiffs)
+  Shared_lists <- list(Shared_same, Shared_diff)
+  names(Shared_lists) <- c("Shared_same", "Shared_different")
+  return (Shared_lists)
+}
+
+# function to compare direction in 2 columns:
+
+Treat_compare <- function(dataframe, col1, col2, col1_name, col2_name) {
+  col1_Up <- MoreCritNum(dataframe, col1, 0)
+  col1_Down <- LessCritNum(dataframe, col1, 0)
+  col1_Up_col2Down <- LessCritNum(col1_Up, col2, 0)
+  col1_Down_col2Up <- MoreCritNum(col1_Down, col2, 0)
+  SameDir <- dataframe[which(!dataframe$Gene %in% union(col1_Up_col2Down$Gene,
+                                                        col1_Down_col2Up$Gene)),]
+  col2_Red <- SameDir[which(abs(SameDir[,col1]) >
+                              abs(SameDir[,col2])),]
+  col2_Inc <- SameDir[which(abs(SameDir[,col1]) <
+                              abs(SameDir[,col2])),]
+  col1_Up_col2Red <- MoreCritNum(col2_Red, col1, 0)
+  col1_Down_col2Red <- LessCritNum(col2_Red, col1, 0)
+  col1_Up_col2Inc <- MoreCritNum(col2_Inc, col1, 0)
+  col1_Down_col2Inc <- LessCritNum(col2_Inc, col1, 0)
+  Magnitudes <- list(col1_Up_col2Red, col1_Down_col2Red, col1_Up_col2Inc, col1_Down_col2Inc, col1_Up_col2Down, col1_Down_col2Up)
+  names(Magnitudes) <- c(paste0("Up_", col1_name, "_reduced_", col2_name), paste0("Down_", col1_name, "_reduced_", col2_name),
+                         paste0("Up_", col1_name, "_increased_", col2_name), paste0("Down_", col1_name, "_increased_", col2_name),
+                         paste0("Up_", col1_name, "_OppositeDir_", col2_name), paste0("Down_", col1_name, "_OppositeDir_", col2_name))
+  return (Magnitudes)
+}
+
 #########################
 ##### REGRESSION #####
 #########################
