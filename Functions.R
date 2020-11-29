@@ -181,6 +181,31 @@ Treat_compare <- function(dataframe, col1, col2, col1_name, col2_name) {
                          paste0("Up_", col1_name, "_OppositeDir_", col2_name), paste0("Down_", col1_name, "_OppositeDir_", col2_name))
   return (Magnitudes)
 }
+Treatment_compare <- function(Sig_df1, Sig_df2, Diff_df, Name_treat1, Name_treat2) {
+  SigSet1_only <- setdiff(Sig_df1$Gene, Sig_df2$Gene)
+  SharedOverlap <- intersect(Sig_df1$Gene, Sig_df2$Gene)
+  Shared_same <- setdiff(SharedOverlap, Diff_df$Gene)
+  Shared_diff <- intersect(SharedOverlap, Diff_df$Gene)
+  Shared_df <- merge(Sig_df1, Sig_df2, by="Gene")
+  Shared_diff_df <- Shared_df[which(Shared_df$Gene %in% Shared_diff),]
+  treat1_Up <- MoreCritNum(Shared_diff_df, "log2FoldChange.x", 0)
+  treat1_Down <- LessCritNum(Shared_diff_df, "log2FoldChange.x", 0)
+  treat1Up_treat2Down <- LessCritNum(treat1_Up, "log2FoldChange.y", 0)
+  treat1Down_treat2Up <- MoreCritNum(treat1_Down, "log2FoldChange.y", 0)
+  DiffDir <- union(treat1Up_treat2Down$Gene, treat1Down_treat2Up$Gene)
+  SameDir <- Shared_diff_df[which(!Shared_diff_df$Gene %in% DiffDir),]
+  treat2_Red <- SameDir[which(abs(SameDir[,"log2FoldChange.x"]) >
+                                abs(SameDir[,"log2FoldChange.y"])),]
+  treat2_Inc <- SameDir[which(abs(SameDir[,"log2FoldChange.x"]) <
+                                abs(SameDir[,"log2FoldChange.y"])),]
+  Categories <- list(SigSet1_only, Shared_same, treat2_Red$Gene, treat2_Inc$Gene, DiffDir)
+  names(Categories) <- c(paste0(Name_treat1, "_only"), 
+                         paste0(Name_treat2, "_", Name_treat1, "_Same"), 
+                         paste0(Name_treat2, "_reduced"),
+                         paste0(Name_treat2, "_increased"),
+                         paste0(Name_treat2,"_Diff_direction"))
+  return (Categories)
+}
 
 #########################
 ##### REGRESSION #####
