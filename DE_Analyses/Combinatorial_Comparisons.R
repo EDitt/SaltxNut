@@ -20,11 +20,35 @@ lapply(SigOverlap, function(x) {length(x$Gene)})
 lapply(SigDiffOverlap, function(x) {length(x$Gene)})
 
 my_dataSig <- lapply(DEData, SigDEdf, PvaluesCol=7, CritP=0.05) #list that contains only the genes that are significant
+my_dataSigUp <- lapply(my_dataSig, MoreCritNum, column=3, critNum=0)
+my_dataSigDown <- lapply(my_dataSig, LessCritNum, column=3, critNum=0)
 
 # total number of DE genes
 TotNumDEgenes <- Reduce("+", lapply(SigOverlap, function(x) {length(x$Gene)})) #23,789
 
+#########################
+####### CATGORIES #######
+#########################
 
+# 1.) Not shared between Salt + Nutrient
+# 2.) Shared with Salt + Nutrient but in the same direction
+# 3.) Shared with Salt + Nutrient but in opposite directions
+
+SaltNut_shared <- intersect(my_dataSig$condition_nutDE_results$Gene, my_dataSig$condition_saltDE_results$Gene)
+length(SaltNut_shared) #6887
+Nut_uniq <- setdiff(my_dataSig$condition_nutDE_results$Gene, SaltNut_shared)
+Salt_uniq <- setdiff(my_dataSig$condition_saltDE_results$Gene, SaltNut_shared)
+length(Nut_uniq) #12,633
+length(Salt_uniq) #3,230
+
+# Shared in opposite directions:
+SaltNut_SameDir <- union(intersect(my_dataSigUp$condition_nutDE_results$Gene, my_dataSigUp$condition_saltDE_results$Gene),
+                         intersect(my_dataSigDown$condition_nutDE_results$Gene, my_dataSigDown$condition_saltDE_results$Gene))
+length(SaltNut_SameDir) #6132
+
+SaltNut_DiffDir <- union(intersect(my_dataSigUp$condition_nutDE_results$Gene, my_dataSigDown$condition_saltDE_results$Gene),
+                         intersect(my_dataSigDown$condition_nutDE_results$Gene, my_dataSigUp$condition_saltDE_results$Gene))
+length(SaltNut_DiffDir) #755
 
 #########################
 # NUTRIENT-COMBO OVERALL #
@@ -134,6 +158,37 @@ SaltSpecific_CatNums <- lapply(SaltSpecific_Cats, function(x) {length(x)})
 labels <- c("Not_DE", "Unchanged", "Decreased_mag", "Increased_mag", "Opposite_dir")
 NutSpecific_df <- df_from_List(NutSpecific_CatNums, labels, "Nutrient_specific")
 SaltSpecific_df <- df_from_List(SaltSpecific_CatNums, labels, "Salt_specific")
+
+#########################
+######## SHARED #########
+#########################
+
+# how many of the Nutrient categories are significant in Salt but in same dir?
+NutSharedDir_Cats <- lapply(NutCombo_Cats, function(x) {intersect(x, SaltNut_SameDir)})
+NutSharedDir_Num <- lapply(NutSharedDir_Cats, function(x) {length(x)})
+
+SaltSharedDir_Cats <- lapply(SaltCombo_Cats, function(x) {intersect(x, SaltNut_SameDir)})
+SaltSharedDir_Num <- lapply(SaltSharedDir_Cats, function(x) {length(x)})
+# they share: 1249 1-stress only
+
+NutSharedDiffDir_Cats <- lapply(NutCombo_Cats, function(x) {intersect(x, SaltNut_DiffDir)})
+NutSharedDiffDir_Num <- lapply(NutSharedDiffDir_Cats, function(x) {length(x)})
+
+
+SaltSharedDiffDir_Cats <- lapply(SaltCombo_Cats, function(x) {intersect(x, SaltNut_DiffDir)})
+SaltSharedDiffDir_Num <- lapply(SaltSharedDiffDir_Cats, function(x) {length(x)})
+# they share: 606 salt/nutrient only "cancelled"
+
+labels <- c("Not_DE", "Unchanged", "Decreased_mag", "Increased_mag", "Opposite_dir")
+
+NutUnSpecific_df <- rbind(df_from_List(NutSharedDir_Num, labels, "Nutrient_Unspecific_SameDir"), 
+                          df_from_List(NutSharedDiffDir_Num, labels, "Nutrient_Unspecific_DiffDir"))
+
+SaltUnSpecific_df <- rbind(df_from_List(SaltSharedDir_Num, labels, "Salt_Unspecific_SameDir"), 
+                          df_from_List(SaltSharedDiffDir_Num, labels, "Salt_Unspecific_DiffDir"))
+
+
+#############################################
 
 #########################
 ###### UN-SPECIFIC ######
