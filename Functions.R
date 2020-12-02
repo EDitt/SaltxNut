@@ -207,6 +207,16 @@ Treatment_compare <- function(Sig_df1, Sig_df2, Diff_df, Name_treat1, Name_treat
   return (Categories)
 }
 
+df_from_List <- function(list, labels, list_name) {
+  df <- data.frame(unlist(list, recursive = TRUE, use.names = TRUE))
+  colnames(df) <- c("Number")
+  df$Stress <- c(list_name)
+  df_labels <- cbind(df, labels)
+  df_total <- sum(df_labels$Number)
+  df_labels$Prop <- df_labels$Number / df_total
+  return (df_labels)
+}
+
 #########################
 ##### REGRESSION #####
 #########################
