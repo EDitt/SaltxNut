@@ -1,5 +1,6 @@
-#qsub -I -q s_interq -l walltime=4:00:00 -l nodes=1:ppn=8 -l mem=50gb
-#module load R/3.6.1-foss-2018a-X11-20180131-GACRC
+
+#srun --pty  -p inter_p  --mem=2G --nodes=1 --ntasks-per-node=1 --time=12:00:00 --job-name=qlogin /bin/bash -l
+#module load module load R/3.6.2-foss-2019b
 #R
 
 #########################
