@@ -33,6 +33,7 @@ Sig_AllTrt <- All_PLvalues[which(All_PLvalues$condition_comboDE_results.padj < 0
                                    All_PLvalues$condition_saltDE_results.padj < 0.05),]
 
 length(Sig_AllTrt$Gene) #23,789
+save(Sig_AllTrt, file = "ResultsFiles/SigGenes.RData")
 
 #########################
 ###### ALL SHARED #######
