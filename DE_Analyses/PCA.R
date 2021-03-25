@@ -15,7 +15,7 @@ library(ggplot2)
 
 setwd("/scratch/eld72413/Salty_Nut/CultivatedOnly/DE_Analyses_Inbred")
 
-library( "genefilter" )
+library( "genefilter" ) #no package?
 library("gplots")
 library("RColorBrewer")
 
@@ -47,6 +47,12 @@ load("SigGenes_transformed.RData")
 
 SigGenes_Mat_Transform <- assay(SigGenes)
 save(SigGenes_Mat_Transform, file = "SigGenes_Mat_Transform.RData")
+
+
+#########################
+###### DATA - LOCAL ######
+#########################
+
 load("ResultsFiles/SigGenes_Mat_Transform.RData")
 
 # 35 most variable genes
@@ -136,7 +142,8 @@ pca_res <- prcomp(Matrix_data[,-c(1:4)], scale. = TRUE)
 pca_res2 <- prcomp(Matrix_data[,-c(1:4)], center = TRUE) #Accessions much more clustered this way
 pca_res3 <- prcomp(Matrix_data[,-c(1:4)], center = TRUE, scale. = TRUE)
 summary(pca_res3)
-autoplot(pca_res3, data=Matrix_data, colour='Treatment', frame = TRUE)
+autoplot(pca_res3, data=Matrix_data, 
+         colour='Treatment', shape='Accession', frame = TRUE)
 #,frame.type = 'norm')
 
 plotMDS(SigGenes_Mat_Transform, labels = design$Treatment)
