@@ -318,3 +318,24 @@ Module_Trait_Corr <- function(TraitData, model, modEigenvalues, NumSamples) {
   return(result)
 }
 
+#########################
+##### GO ENRICHMENT #####
+#########################
+
+### Function for GO Term Enrichment
+
+#LengthTable must have Gene ID as first column + Length as 2nd column
+#GO_Terms must have GeneID ("Parent") as first column, and GO Term ("Ontology_term") in 2nd column
+
+GO_Enrichment <- function (AllGenes, DE_Genes, LengthTable, GO_Terms) {
+  common <- intersect(AllGenes, LengthTable[,1])
+  LengthTable <- as.data.frame(LengthTable[LengthTable[,1] %in% common, ]) #"all" genes
+  LengthTable <- LengthTable[order(LengthTable[,1]),] #order by gene ID
+  gene.vector=as.integer(AllGenes %in% DE_Genes)
+  names(gene.vector)=AllGenes
+  pwf <- nullp(gene.vector, bias.data = LengthTable[,2])
+  GO.wall <- goseq(pwf, gene2cat = GO_Terms)
+  enriched.GO=GO.wall$category[p.adjust(GO.wall$over_represented_pvalue, method="BH")<.05]
+  enrichedGO_table <- GO.wall[is.element(GO.wall$category, enriched.GO),]
+  return(enrichedGO_table)
+}
