@@ -141,7 +141,7 @@ SaltSpecific_df <- df_from_List(SaltSpecific_CatNums, labels, "Salt_specific")
 ###### UN-SPECIFIC ######
 #########################
 
-lapply(Combo_patterns, function(x) {length(x)})
+lapply(Combo_patterns, function(x) {length(x)}) ### where is the code for this list???
 # shared with both: 606 cancelled, 1249 1-stress-specific, 
 # 2627 all shared, 12 additive-combo higher, 6 "subtractive" combo lower
 
@@ -165,8 +165,18 @@ lapply(SaltUnSpecific_Cats, function(x) {length(intersect(x, NutUnSpecific_Cats$
 # 6 of the reduced, 12 of the increased, 0 diff direction
 
 #########################
+#### SAVE GENE LISTS ####
+#########################
+
+save(NutSpecific_Cats, SaltSpecific_Cats, NutUnSpecific_Cats, SaltUnSpecific_Cats, 
+     file="ResultsFiles/GeneSets/MultiStressCompare.RData")
+
+#########################
 ### UN-SPECIFIC MATCH ###
 #########################
+
+#names(NutUnSpecific_Cats) <- c(labels)
+#names(SaltUnSpecific_Cats) <- c(labels)
 
 lists <- 1:length(SaltUnSpecific_Cats)
 
@@ -185,7 +195,9 @@ overlap_comb_df$Nut_cat <- as.factor(sapply(overlap_comb_df$Catinteraction_strin
 # to alter nutrient categories to match salt
 overlap_comb_df$Stress <- "Nut_Unspecific"
 overlap_comb_df_Nut <- overlap_comb_df[order(overlap_comb_df$Salt_cat),]
-df_to_bind_Nut <- overlap_comb_df_Nut[,c(1,6,2)]
+#df_to_bind_Nut <- overlap_comb_df_Nut[,c("Number","Stress","Nut_cat")]
+#colnames(df_to_bind_Nut)[3] <- "labels"
+df_to_bind_Nut <- overlap_comb_df_Nut[,c("Number","Stress","labels")]
 
 # to alter salt categories to match nutrient
 #overlap_comb_df$Stress <- "Salt_Unspecific"
@@ -225,7 +237,11 @@ df_all_full$Stress <- factor(df_all_full$Stress,
                                    "Salt_Unspecific", "Salt_specific"))
 
 df_all <- subset(df_all_full, df_all_full$Number > 0)
+df_all$labels <- factor(df_all$labels)
 df_all$labels <- droplevels(df_all$labels)
+levels(df_all$labels)
+
+# I changed the levels of labels so that the "shared" responses between salt and nutrient matched up
 df_all$labels <- factor(df_all$labels, 
                         levels = c("Opposite_dir", "Increased_mag", "Decreased_mag", "Not_DE", "Unchanged",
                                     "Combo_Diff_direction.Combo_reduced", "Combo_Diff_direction.Combo_Nutrient_Same",
@@ -241,25 +257,33 @@ df_all$labels <- factor(df_all$labels,
 ######### GRAPH #########
 #########################
 
+Opposite_col <- c("olivedrab4")
+Unchanged_col <- c("#4A6990FF") #periwinkle blue
+Increased_col <- c("#A73030FF")
+#Increased_col <- c("#CD534CFF") #lighter red
+Decreased_col <- c("#EFC000FF")
+#NotDE_col <- c("#868686FF")
+NotDE_col <- c("grey55")
 
 str(df_all)
-df_all$labels <- factor(df_all$labels, 
-                        levels = c("Opposite_dir", "Increased_mag", 
-                                   "Decreased_mag", "Unchanged", "Not_DE"))
-df_all$Stress <- factor(df_all$Stress, levels = c("Nutrient_specific", "Nutrient_Unspecific", 
-                                                  "Salt_Unspecific", "Salt_specific"))
 
 all_p <- ggplot(df_all, aes(fill=labels, y=Number, x=Stress))
-all_p + geom_bar(position="stack", stat="identity", color="black", size=0.2) +
+all_p + 
+  geom_bar(position="stack", stat="identity", color="black", size=0.2) +
   ylab("Number of DE Genes") +
-  #ylim(0,7500) +
-  scale_fill_manual(values=c("#8F7700FF", "#A73030FF", "#EFC000FF", "#868686FF", "#3B528BFF"),
-                    guide=guide_legend(reverse = TRUE),
-                    #labels=c("Opposite Direction", "Increased", 
-                    #         "Decreased", "Not DE", "Un-changed"),
-                    name="Addition of Second Stress") +
+  scale_fill_manual(values=c(Opposite_col, Increased_col, Decreased_col, NotDE_col, Unchanged_col,
+                             Decreased_col, Unchanged_col,
+                             Increased_col, Decreased_col, Unchanged_col,
+                             Opposite_col, Increased_col, Decreased_col, Unchanged_col,
+                             NotDE_col,
+                             Opposite_col, Increased_col, Decreased_col, Unchanged_col),
+                    name="Addition of Second Stress",
+                    breaks=c("Unchanged", "Decreased_mag",
+                             "Increased_mag", "Opposite_dir", "Not_DE"),
+                    labels=c("Un-changed",
+                             "Decreased Magnitude", "Increased Magnitude",
+                             "Opposite Direction", "No Longer Differentially Expressed")) +
   theme_bw(base_size = 14)
-
 
 
 
