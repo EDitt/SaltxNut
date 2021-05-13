@@ -26,29 +26,6 @@ my_dataSigDown <- lapply(my_dataSig, LessCritNum, column=3, critNum=0)
 # total number of DE genes
 TotNumDEgenes <- Reduce("+", lapply(SigOverlap, function(x) {length(x$Gene)})) #23,789
 
-#########################
-####### CATGORIES #######
-#########################
-
-# 1.) Not shared between Salt + Nutrient
-# 2.) Shared with Salt + Nutrient but in the same direction
-# 3.) Shared with Salt + Nutrient but in opposite directions
-
-SaltNut_shared <- intersect(my_dataSig$condition_nutDE_results$Gene, my_dataSig$condition_saltDE_results$Gene)
-length(SaltNut_shared) #6887
-Nut_uniq <- setdiff(my_dataSig$condition_nutDE_results$Gene, SaltNut_shared)
-Salt_uniq <- setdiff(my_dataSig$condition_saltDE_results$Gene, SaltNut_shared)
-length(Nut_uniq) #12,633
-length(Salt_uniq) #3,230
-
-# Shared in opposite directions:
-SaltNut_SameDir <- union(intersect(my_dataSigUp$condition_nutDE_results$Gene, my_dataSigUp$condition_saltDE_results$Gene),
-                         intersect(my_dataSigDown$condition_nutDE_results$Gene, my_dataSigDown$condition_saltDE_results$Gene))
-length(SaltNut_SameDir) #6132
-
-SaltNut_DiffDir <- union(intersect(my_dataSigUp$condition_nutDE_results$Gene, my_dataSigDown$condition_saltDE_results$Gene),
-                         intersect(my_dataSigDown$condition_nutDE_results$Gene, my_dataSigUp$condition_saltDE_results$Gene))
-length(SaltNut_DiffDir) #755
 
 #########################
 # NUTRIENT-COMBO OVERALL #
@@ -159,36 +136,6 @@ labels <- c("Not_DE", "Unchanged", "Decreased_mag", "Increased_mag", "Opposite_d
 NutSpecific_df <- df_from_List(NutSpecific_CatNums, labels, "Nutrient_specific")
 SaltSpecific_df <- df_from_List(SaltSpecific_CatNums, labels, "Salt_specific")
 
-#########################
-######## SHARED #########
-#########################
-
-# how many of the Nutrient categories are significant in Salt but in same dir?
-NutSharedDir_Cats <- lapply(NutCombo_Cats, function(x) {intersect(x, SaltNut_SameDir)})
-NutSharedDir_Num <- lapply(NutSharedDir_Cats, function(x) {length(x)})
-
-SaltSharedDir_Cats <- lapply(SaltCombo_Cats, function(x) {intersect(x, SaltNut_SameDir)})
-SaltSharedDir_Num <- lapply(SaltSharedDir_Cats, function(x) {length(x)})
-# they share: 1249 1-stress only
-
-NutSharedDiffDir_Cats <- lapply(NutCombo_Cats, function(x) {intersect(x, SaltNut_DiffDir)})
-NutSharedDiffDir_Num <- lapply(NutSharedDiffDir_Cats, function(x) {length(x)})
-
-
-SaltSharedDiffDir_Cats <- lapply(SaltCombo_Cats, function(x) {intersect(x, SaltNut_DiffDir)})
-SaltSharedDiffDir_Num <- lapply(SaltSharedDiffDir_Cats, function(x) {length(x)})
-# they share: 606 salt/nutrient only "cancelled"
-
-labels <- c("Not_DE", "Unchanged", "Decreased_mag", "Increased_mag", "Opposite_dir")
-
-NutUnSpecific_df <- rbind(df_from_List(NutSharedDir_Num, labels, "Nutrient_Unspecific_SameDir"), 
-                          df_from_List(NutSharedDiffDir_Num, labels, "Nutrient_Unspecific_DiffDir"))
-
-SaltUnSpecific_df <- rbind(df_from_List(SaltSharedDir_Num, labels, "Salt_Unspecific_SameDir"), 
-                          df_from_List(SaltSharedDiffDir_Num, labels, "Salt_Unspecific_DiffDir"))
-
-
-#############################################
 
 #########################
 ###### UN-SPECIFIC ######
@@ -206,6 +153,133 @@ NutUnSpecific_CatNums <- lapply(NutUnSpecific_Cats, function(x) {length(x)})
 SaltUnSpecific_Cats <- lapply(SaltCombo_Cats, function(x) {intersect(x, my_dataSig$condition_nutDE_results$Gene)})
 SaltUnSpecific_CatNums <- lapply(SaltUnSpecific_Cats, function(x) {length(x)}) # Salt only: 1855
 # Salt only: 1855, Combo-Salt_same: 4833, Combo_reduced: 64, combo_increased: 125, diff direction:10
+
+labels <- c("Not_DE", "Unchanged", "Decreased_mag", "Increased_mag", "Opposite_dir")
+NutUnSpecific_df <- df_from_List(NutUnSpecific_CatNums, labels, "Nutrient_Unspecific")
+SaltUnSpecific_df <- df_from_List(SaltUnSpecific_CatNums, labels, "Salt_Unspecific")
+
+## which genes are in the same categories?
+lapply(SaltUnSpecific_Cats, function(x) {length(intersect(x, NutUnSpecific_Cats$Combo_Diff_direction))})
+# all 1855 of the "not DE" category
+# 3138 of the "Unchanged"
+# 6 of the reduced, 12 of the increased, 0 diff direction
+
+#########################
+### UN-SPECIFIC MATCH ###
+#########################
+
+lists <- 1:length(SaltUnSpecific_Cats)
+
+# overlap across categories:
+overlap_combinations <- lapply(SaltUnSpecific_Cats[lists], function(x) {lapply(NutUnSpecific_Cats[lists], 
+                                                                               function (y) {length(intersect(x,y))})})
+overlap_comb_df <- data.frame(unlist(overlap_combinations, recursive = TRUE, use.names = TRUE))
+colnames(overlap_comb_df) <- c("Number")
+overlap_comb_df$labels <- as.character(rownames(overlap_comb_df))
+overlap_comb_df$Catinteraction_string <- strsplit(overlap_comb_df$labels, "[.]")
+overlap_comb_df$Salt_cat <- as.factor(sapply(overlap_comb_df$Catinteraction_string, 
+                                             "[", 1))
+overlap_comb_df$Nut_cat <- as.factor(sapply(overlap_comb_df$Catinteraction_string, 
+                                            "[", 2))
+
+# to alter nutrient categories to match salt
+overlap_comb_df$Stress <- "Nut_Unspecific"
+overlap_comb_df_Nut <- overlap_comb_df[order(overlap_comb_df$Salt_cat),]
+df_to_bind_Nut <- overlap_comb_df_Nut[,c(1,6,2)]
+
+# to alter salt categories to match nutrient
+#overlap_comb_df$Stress <- "Salt_Unspecific"
+#overlap_comb_df_Salt <- overlap_comb_df[order(overlap_comb_df$Nut_cat),]
+#df_to_bind_Salt <- overlap_comb_df_Salt[,c(1,6,2)]
+
+### Nut Unspecific with Salt cats
+#Unspecific_df <- rbind(NutUnSpecific_df[,c(1:3)], df_to_bind_Salt,  make.row.names=FALSE)
+#Unspecific_df$Stress <- factor(Unspecific_df$Stress)
+#Unspecific_df2 <- subset(Unspecific_df, Unspecific_df$Number > 0)
+#Unspecific_df2$labels <- droplevels(Unspecific_df2$labels)
+#Unspecific_df2$labels <- factor(Unspecific_df2$labels, 
+#                                levels = c("Opposite_dir", "Increased_mag",
+#                                           "Decreased_mag", "Not_DE",
+#                                           "Unchanged",
+#                                           "Combo_reduced.Combo_Diff_direction", 
+#                                           "Combo_Salt_Same.Combo_Diff_direction",
+#                                           "Combo_increased.Combo_increased",
+#                                           "Combo_reduced.Combo_increased", 
+#                                           "Combo_Salt_Same.Combo_increased", 
+#                                           "Combo_Diff_direction.Combo_reduced",
+#                                          "Combo_increased.Combo_reduced",
+#                                           "Combo_reduced.Combo_reduced",
+#                                           "Combo_Salt_Same.Combo_reduced",
+#                                           "Salt_only.Nutrient_only",
+#                                           "Combo_Diff_direction.Combo_Nutrient_Same",
+#                                           "Combo_increased.Combo_Nutrient_Same",
+#                                           "Combo_reduced.Combo_Nutrient_Same",
+#                                           "Combo_Salt_Same.Combo_Nutrient_Same"))
+
+### Salt Unspecific with Nutrient
+df_all_full <- rbind(NutSpecific_df[,c(1:3)], df_to_bind_Nut,
+                SaltUnSpecific_df[,c(1:3)], SaltSpecific_df[,c(1:3)],
+                make.row.names=FALSE)
+df_all_full$Stress <- factor(df_all_full$Stress,
+                        levels = c("Nutrient_specific", "Nut_Unspecific",
+                                   "Salt_Unspecific", "Salt_specific"))
+
+df_all <- subset(df_all_full, df_all_full$Number > 0)
+df_all$labels <- droplevels(df_all$labels)
+df_all$labels <- factor(df_all$labels, 
+                        levels = c("Opposite_dir", "Increased_mag", "Decreased_mag", "Not_DE", "Unchanged",
+                                    "Combo_Diff_direction.Combo_reduced", "Combo_Diff_direction.Combo_Nutrient_Same",
+                                    "Combo_increased.Combo_increased", "Combo_increased.Combo_reduced",
+                                    "Combo_increased.Combo_Nutrient_Same",
+                                    "Combo_reduced.Combo_Diff_direction", "Combo_reduced.Combo_increased",
+                                    "Combo_reduced.Combo_reduced", "Combo_reduced.Combo_Nutrient_Same",
+                                    "Salt_only.Nutrient_only",
+                                    "Combo_Salt_Same.Combo_Diff_direction", "Combo_Salt_Same.Combo_increased",
+                                    "Combo_Salt_Same.Combo_reduced", "Combo_Salt_Same.Combo_Nutrient_Same"))
+
+#########################
+######### GRAPH #########
+#########################
+
+
+str(df_all)
+df_all$labels <- factor(df_all$labels, 
+                        levels = c("Opposite_dir", "Increased_mag", 
+                                   "Decreased_mag", "Unchanged", "Not_DE"))
+df_all$Stress <- factor(df_all$Stress, levels = c("Nutrient_specific", "Nutrient_Unspecific", 
+                                                  "Salt_Unspecific", "Salt_specific"))
+
+all_p <- ggplot(df_all, aes(fill=labels, y=Number, x=Stress))
+all_p + geom_bar(position="stack", stat="identity", color="black", size=0.2) +
+  ylab("Number of DE Genes") +
+  #ylim(0,7500) +
+  scale_fill_manual(values=c("#8F7700FF", "#A73030FF", "#EFC000FF", "#868686FF", "#3B528BFF"),
+                    guide=guide_legend(reverse = TRUE),
+                    #labels=c("Opposite Direction", "Increased", 
+                    #         "Decreased", "Not DE", "Un-changed"),
+                    name="Addition of Second Stress") +
+  theme_bw(base_size = 14)
+
+
+
+
+
+######### SCRATCH
+#############################################
+
+Categories <- c("Un_changed", "Not_DE", "Mag_decreased")
+Stress <- c("Nutrient", "Salt")
+
+
+# for NS in Combo:
+Categories <- c("Cancelled", "One_stress_specific", "Stress_specific_conditional")
+Stress <- c("Nutrient", "Salt")
+
+# for Un-changed:
+Categories <- c("Shared_response", "Stress_specific_Unconditional")
+
+# for Mag. decreased
+Categories <- c("Stress_specific_conditional", "Antagonistic", "")
 
 
 ### Overlap
@@ -233,25 +307,6 @@ lapply(SaltUnSpecific_Cats, function(x) {length(intersect(x, NutUnSpecific_Cats$
 lapply(SaltUnSpecific_Cats, function(x) {length(intersect(x, NutUnSpecific_Cats$Nutrient_only))})
 # 1855- salt-only
 
-#########################
-####### DATAFRAME #######
-#########################
-
-Categories <- c("Un_changed", "Not_DE", "Mag_decreased")
-Stress <- c("Nutrient", "Salt")
-
-
-# for NS in Combo:
-Categories <- c("Cancelled", "One_stress_specific", "Stress_specific_conditional")
-Stress <- c("Nutrient", "Salt")
-
-# for Un-changed:
-Categories <- c("Shared_response", "Stress_specific_Unconditional")
-
-# for Mag. decreased
-Categories <- c("Stress_specific_conditional", "Antagonistic", "")
-
-######### SCRATCH
 
 #########################
 ### NUT-COMBO SEPARATE ##
