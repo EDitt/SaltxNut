@@ -141,7 +141,7 @@ SaltSpecific_df <- df_from_List(SaltSpecific_CatNums, labels, "Salt_specific")
 ###### UN-SPECIFIC ######
 #########################
 
-lapply(Combo_patterns, function(x) {length(x)}) ### where is the code for this list???
+# lapply(Combo_patterns, function(x) {length(x)}) ### where is the code for this list???
 # shared with both: 606 cancelled, 1249 1-stress-specific, 
 # 2627 all shared, 12 additive-combo higher, 6 "subtractive" combo lower
 
@@ -193,35 +193,6 @@ overlap_comb_df$Nut_cat <- as.factor(sapply(overlap_comb_df$Catinteraction_strin
 overlap_comb_df$Stress <- "Nut_Unspecific"
 overlap_comb_df_Nut <- overlap_comb_df[order(overlap_comb_df$Salt_cat),]
 df_to_bind_Nut <- overlap_comb_df_Nut[,c("Number","Stress","labels")]
-
-# to alter salt categories to match nutrient
-#overlap_comb_df$Stress <- "Salt_Unspecific"
-#overlap_comb_df_Salt <- overlap_comb_df[order(overlap_comb_df$Nut_cat),]
-#df_to_bind_Salt <- overlap_comb_df_Salt[,c(1,6,2)]
-
-### Nut Unspecific with Salt cats
-#Unspecific_df <- rbind(NutUnSpecific_df[,c(1:3)], df_to_bind_Salt,  make.row.names=FALSE)
-#Unspecific_df$Stress <- factor(Unspecific_df$Stress)
-#Unspecific_df2 <- subset(Unspecific_df, Unspecific_df$Number > 0)
-#Unspecific_df2$labels <- droplevels(Unspecific_df2$labels)
-#Unspecific_df2$labels <- factor(Unspecific_df2$labels, 
-#                                levels = c("Opposite_dir", "Increased_mag",
-#                                           "Decreased_mag", "Not_DE",
-#                                           "Unchanged",
-#                                           "Combo_reduced.Combo_Diff_direction", 
-#                                           "Combo_Salt_Same.Combo_Diff_direction",
-#                                           "Combo_increased.Combo_increased",
-#                                           "Combo_reduced.Combo_increased", 
-#                                           "Combo_Salt_Same.Combo_increased", 
-#                                           "Combo_Diff_direction.Combo_reduced",
-#                                          "Combo_increased.Combo_reduced",
-#                                           "Combo_reduced.Combo_reduced",
-#                                           "Combo_Salt_Same.Combo_reduced",
-#                                           "Salt_only.Nutrient_only",
-#                                           "Combo_Diff_direction.Combo_Nutrient_Same",
-#                                           "Combo_increased.Combo_Nutrient_Same",
-#                                           "Combo_reduced.Combo_Nutrient_Same",
-#                                           "Combo_Salt_Same.Combo_Nutrient_Same"))
 
 ### Salt Unspecific with Nutrient
 df_all_full <- rbind(NutSpecific_df[,c(1:3)], df_to_bind_Nut,
