@@ -71,6 +71,7 @@ SaltCatNums <- lapply(SaltCombo_Cats, function(x) {length(x)})
 
 #### Save:
 save(NutCombo_Cats, SaltCombo_Cats, file="ResultsFiles/StressAdditionCats.RData")
+load("ResultsFiles/StressAdditionCats.RData")
 
 In_Combo <- c("Not_Significant", "Un_changed", "Lower_Magnitude", "Higher_Magnitude", "Opposite_direction")
 
@@ -171,6 +172,8 @@ lapply(SaltUnSpecific_Cats, function(x) {length(intersect(x, NutUnSpecific_Cats$
 save(NutSpecific_Cats, SaltSpecific_Cats, NutUnSpecific_Cats, SaltUnSpecific_Cats, 
      file="ResultsFiles/GeneSets/MultiStressCompare.RData")
 
+load("ResultsFiles/GeneSets/MultiStressCompare.RData")
+
 #########################
 ### UN-SPECIFIC MATCH ###
 #########################
@@ -249,3 +252,6 @@ all_p + geom_bar(position="stack", stat="identity", color="black", size=0.2) +
                              "Decreased Magnitude", "Increased Magnitude",
                              "Opposite Direction", "No Longer Differentially Expressed")) +
   theme_bw(base_size = 14)
+
+ggsave("/Users/emilydittmar/Google Drive/Active Projects/Transcriptomics_Exp/Analyses/Figures/BarPlot.png",
+       width = 9, height=5.5)
