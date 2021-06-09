@@ -50,20 +50,88 @@ save(SigGenes_Mat_Transform, file = "SigGenes_Mat_Transform.RData")
 
 
 #########################
-###### DATA - LOCAL ######
+###### PCA - LOCAL ######
 #########################
 
 load("ResultsFiles/SigGenes_Mat_Transform.RData")
 
-# 35 most variable genes
-topSigGenes <- head( order( rowVars( SigGenes ), decreasing=TRUE ), 35 )
+# load grouping variables:
+design <- read.csv("DataFiles/StudyDesign_Inbred_noOut.csv", header=T)
 
-# top variable genes
-topVarGenes <- head( order( rowVars( assay(vsd) ), decreasing=TRUE ), 35 )
+### Use ggplot & all genes
+Matrix_all <- as.data.frame(t(SigGenes_Mat_Transform))
+pca_all <- prcomp(Matrix_all, center = TRUE, scale. = TRUE)
+pca_all$sdev
+pca_resultsAll_graph <- cbind(design[,c(2,8,14,17)], pca_all$x[,1:4])
 
+p <- ggplot(data=pca_resultsAll_graph, aes(x=PC1, y=PC2))
+p+geom_point(aes(color=Treatment, shape=Accession))
+
+p2 <- ggplot(data=pca_resultsAll_graph, aes(x=PC3, y=PC4))
+p2+geom_point(aes(color=Treatment, shape=Accession))
+
+# ggfortify extension
+Matrix_data <- cbind(design[,c(2,8,14,17)], Matrix_all)
+pca_res <- prcomp(Matrix_data[,-c(1:4)], scale. = TRUE)
+pca_res2 <- prcomp(Matrix_data[,-c(1:4)], center = TRUE) #Accessions much more clustered this way
+pca_res3 <- prcomp(Matrix_data[,-c(1:4)], center = TRUE, scale. = TRUE)
+summary(pca_res3) # PC1=19.04%, PC2=9.4%
+autoplot(pca_res3, data=Matrix_data, 
+         colour='Treatment', shape='Accession', frame = TRUE) +
+  theme_minimal()
+#,frame.type = 'norm')
+
+ggsave("/Users/emilydittmar/Google Drive/Active Projects/Transcriptomics_Exp/Analyses/Figures/Inbred_PCA.png")
+
+plotMDS(SigGenes_Mat_Transform, labels = design$Treatment) # need deseq2
 
 ###############################
-###########  PCA  #############
+###### SAMPLE DISTANCE ########
+###############################
+
+### Extract sample distances (using all genes)
+sampleDists <- dist(t(assay(vsd)))
+
+# Re-cluster samples
+sampleTree = hclust(sampleDists, method = "average")
+
+pdf(file = "SampleClustering_wline.pdf", width = 12, height = 12);
+plot(sampleTree, main = "Sample clustering on all genes", 
+     xlab="", sub="", cex = 0.7);
+abline(h=180, col = "red");
+dev.off()
+
+
+#########################
+####### HEATMAP #########
+#########################
+
+pdf(file = "Heatmap.pdf", width = 12, height = 12);
+heatmap.2( assay(vsd)[ topVarGenes, ], scale="row",
+trace="none", dendrogram="column",
+col = colorRampPalette( rev(brewer.pal(9, "RdBu")) )(255))
+dev.off()
+
+pdf(file = "HeatmapSig.pdf", width = 12, height = 12);
+heatmap.2( head(SigGenes,35), scale="row",
+trace="none", dendrogram="column",
+col = colorRampPalette( rev(brewer.pal(9, "RdBu")) )(255))
+dev.off()
+
+pdf(file = "HeatmapSig2.pdf", width = 12, height = 12);
+heatmap.2( SigGenes[ topSigGenes, ], scale="row",
+trace="none", dendrogram="column",
+col = colorRampPalette( rev(brewer.pal(9, "RdBu")) )(255))
+dev.off()
+
+pdf(file = "HeatmapSigAll.pdf", width = 12, height = 12);
+heatmap.2( SigGenes, scale="row",
+trace="none", dendrogram="column",
+col = colorRampPalette( rev(brewer.pal(9, "RdBu")) )(255))
+dev.off()
+
+###############################
+##  PCA WITH DESEQ2 FUNCTION ##
 ###############################
 
 pcaData <- plotPCA(vsd, intgroup = c("Accession", "Treatment"), ntop = 500, returnData = TRUE) 
@@ -123,72 +191,3 @@ Make_PCA(design[,c(2,8,14,17)], SigGenes_Mat_Transform, 23789, "Treatment")
 plot(test$x[,1:2]) 
 
 biplot(pca_results, choices = 1:2, scale =1, pc.biplot = FALSE)
-
-### Use ggplot & all genes
-Matrix_all <- as.data.frame(t(SigGenes_Mat_Transform))
-pca_all <- prcomp(Matrix_all, center = TRUE, scale. = TRUE)
-pca_all$sdev
-pca_resultsAll_graph <- cbind(design[,c(2,8,14,17)], pca_all$x[,1:4])
-
-p <- ggplot(data=pca_resultsAll_graph, aes(x=PC1, y=PC2))
-p+geom_point(aes(color=Treatment, shape=Accession))
-
-p2 <- ggplot(data=pca_resultsAll_graph, aes(x=PC3, y=PC4))
-p2+geom_point(aes(color=Treatment, shape=Accession))
-
-# ggfortify extension
-Matrix_data <- cbind(design[,c(2,8,14,17)], Matrix_all)
-pca_res <- prcomp(Matrix_data[,-c(1:4)], scale. = TRUE)
-pca_res2 <- prcomp(Matrix_data[,-c(1:4)], center = TRUE) #Accessions much more clustered this way
-pca_res3 <- prcomp(Matrix_data[,-c(1:4)], center = TRUE, scale. = TRUE)
-summary(pca_res3)
-autoplot(pca_res3, data=Matrix_data, 
-         colour='Treatment', shape='Accession', frame = TRUE)
-#,frame.type = 'norm')
-
-plotMDS(SigGenes_Mat_Transform, labels = design$Treatment)
-
-###############################
-###### SAMPLE DISTANCE ########
-###############################
-
-### Extract sample distances (using all genes)
-sampleDists <- dist(t(assay(vsd)))
-
-# Re-cluster samples
-sampleTree = hclust(sampleDists, method = "average")
-
-pdf(file = "SampleClustering_wline.pdf", width = 12, height = 12);
-plot(sampleTree, main = "Sample clustering on all genes", 
-     xlab="", sub="", cex = 0.7);
-abline(h=180, col = "red");
-dev.off()
-
-
-#########################
-####### HEATMAP #########
-#########################
-
-pdf(file = "Heatmap.pdf", width = 12, height = 12);
-heatmap.2( assay(vsd)[ topVarGenes, ], scale="row",
-trace="none", dendrogram="column",
-col = colorRampPalette( rev(brewer.pal(9, "RdBu")) )(255))
-dev.off()
-
-pdf(file = "HeatmapSig.pdf", width = 12, height = 12);
-heatmap.2( head(SigGenes,35), scale="row",
-trace="none", dendrogram="column",
-col = colorRampPalette( rev(brewer.pal(9, "RdBu")) )(255))
-dev.off()
-
-pdf(file = "HeatmapSig2.pdf", width = 12, height = 12);
-heatmap.2( SigGenes[ topSigGenes, ], scale="row",
-trace="none", dendrogram="column",
-col = colorRampPalette( rev(brewer.pal(9, "RdBu")) )(255))
-dev.off()
-
-pdf(file = "HeatmapSigAll.pdf", width = 12, height = 12);
-heatmap.2( SigGenes, scale="row",
-trace="none", dendrogram="column",
-col = colorRampPalette( rev(brewer.pal(9, "RdBu")) )(255))
-dev.off()
