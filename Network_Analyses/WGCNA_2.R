@@ -1,10 +1,8 @@
 #### WGCNA ANALYSES ####
 
-#qsub -I -q s_interq -l walltime=8:00:00 -l nodes=1:ppn=8 -l mem=50gb
-#module load R/3.6.1-foss-2018a-X11-20180131-GACRC
+#srun --pty  -p inter_p  --mem=50G --nodes=1 --ntasks-per-node=8 --time=6:00:00 --job-name=qlogin /bin/bash -l
+#module load R/4.0.0-foss-2019b
 #R
-
-setwd("/scratch/eld72413/Salty_Nut/CultivatedOnly/DE_Analyses_Inbred")
 
 #########################
 ######## SETUP ##########
@@ -27,10 +25,9 @@ register(MulticoreParam(8)) #register cores so can specify parallel=TRUE when ne
 ##### LOAD DATA OBJECTS #####
 #############################
 
-load("NetworkData_outliersRem.RData")
-dim(y_red) # 102 x 13
-dim(datExpr_red) # 102  23236
-
+load("multiExpr.RData")
+exprSize = checkSets(multiExpr)
+exprSize
 
 ###############################
 # CHOOSE SOFT-THRESHOLD POWER #
@@ -44,56 +41,68 @@ enableWGCNAThreads(nThreads = 8)
 # Co-expression similarity is transformed into adjacency (raised to power of beta for weighted network)
 # soft-threshold power is a trade-off between scale free topology and mean connectivity
 
-# Choose a set of soft-thresholding powers
-powers = c(c(1:10), seq(from = 12, to=20, by=2))
-
-# Call the network topology analysis function
-# Using biweight mid-correlation instead of default Pearson
-sft = pickSoftThreshold(datExpr_red, 
-                        powerVector = powers, 
-                        corFnc = bicor,
-                        networkType = "signed",
-                        verbose = 5)
+# Initialize a list to hold the results of scale-free analysis
+powerTables = vector(mode = "list", length = nSets);
+# Call the network topology analysis function for each set in turn
+for (set in 1:nSets)
+powerTables[[set]] = list(data = pickSoftThreshold(multiExpr[[set]]$data, powerVector=powers,
+verbose = 2)[[2]]);
+collectGarbage();
 
 # Plot the results:
-pdf(file = "Soft_Threshold_bicor.pdf", width = 8, height = 8)
-par(mfrow = c(1,2));
-cex1 = 0.9;
-# Scale-free topology fit index as a function of the soft-thresholding power
-plot(sft$fitIndices[,1], -sign(sft$fitIndices[,3])*sft$fitIndices[,2],
-     xlab="Soft Threshold (power)",ylab="Scale Free Topology Model Fit,signed R^2",type="n",
-     main = paste("Scale independence"),
-     ylim=c(0,1.0));
-text(sft$fitIndices[,1], -sign(sft$fitIndices[,3])*sft$fitIndices[,2],
-     labels=powers,cex=cex1,col="red");
-# this line corresponds to using an R^2 cut-off of h
-abline(h=0.90,col="red")
+colors = c("black", "red")
+# Will plot these columns of the returned scale free analysis tables
+plotCols = c(2,5,6,7)
+colNames = c("Scale Free Topology Model Fit", "Mean connectivity", "Median connectivity",
+"Max connectivity");
+# Get the minima and maxima of the plotted points
+ylim = matrix(NA, nrow = 2, ncol = 4);
+for (set in 1:nSets)
+{
+for (col in 1:length(plotCols))
+{
+ylim[1, col] = min(ylim[1, col], powerTables[[set]]$data[, plotCols[col]], na.rm = TRUE);
+ylim[2, col] = max(ylim[2, col], powerTables[[set]]$data[, plotCols[col]], na.rm = TRUE);
+}
+}
 
-# Mean connectivity as a function of the soft-thresholding power
-plot(sft$fitIndices[,1], sft$fitIndices[,5],
-     xlab="Soft Threshold (power)",ylab="Mean Connectivity", type="n",
-     main = paste("Mean connectivity"))
-text(sft$fitIndices[,1], sft$fitIndices[,5], labels=powers, cex=cex1,col="red")
-
+# Plot the quantities in the chosen columns vs. the soft thresholding power
+pdf(file = "Consensus_Network/Network_thresholds.pdf", width = 8, height = 8)
+par(mfcol = c(2,2));
+par(mar = c(4.2, 4.2 , 2.2, 0.5))
+cex1 = 0.7;
+for (col in 1:length(plotCols)) for (set in 1:nSets)
+{
+if (set==1)
+{
+plot(powerTables[[set]]$data[,1], -sign(powerTables[[set]]$data[,3])*powerTables[[set]]$data[,2],
+xlab="Soft Threshold (power)",ylab=colNames[col],type="n", ylim = ylim[, col],
+main = colNames[col]);
+addGrid();
+}
+if (col==1)
+{
+text(powerTables[[set]]$data[,1], -sign(powerTables[[set]]$data[,3])*powerTables[[set]]$data[,2],
+labels=powers,cex=cex1,col=colors[set]);
+} else
+text(powerTables[[set]]$data[,1], powerTables[[set]]$data[,plotCols[col]],
+labels=powers,cex=cex1,col=colors[set]);
+if (col==1)
+{
+legend("bottomright", legend = setLabels, col = colors, pch = 20) ;
+} else
+legend("topright", legend = setLabels, col = colors, pch = 20) ;
+}
 dev.off()
 
-#### Choose value of 12 - lowest power for which scale-free topology fit index reaches 0.9
-#### topology index doesn't quite reach 0.9 however
+# stopping point for now
 
-#### Does this value show a network that exhibits scale free topology?
-k=softConnectivity(datE=datExpr_red,power=12)
-# softConnectivity: FYI: connecitivty of genes with less than 34 valid samples will be returned as NA.
-
-# Plot a histogram of k and a scale free topology plot
-pdf(file = "k and scale free topology.pdf", width = 8, height = 8)
-par(mfrow=c(1,2))
-hist(k)
-scaleFreePlot(k, main="Check scale free topology\n")
-dev.off()
-
+################################
+#### CALCULATE ADJACENCIES #####
+################################
 
 ### Define beta and calculate adjacency using the soft thresholding power 12
-softPower = 12
+softPower = 
 adjacency = adjacency(datExpr_red,
                       type = "signed",
                       power = softPower,
@@ -328,3 +337,55 @@ write.csv(MExp, file = "ModExpression_pamTRUE.csv")
 ### Module Eigengenes:
 signif(cor(datME, use="p"), 2) #how correlated are modules
 
+
+
+
+###### Archive (before I made separate networks for HA & RHA)
+#####
+# Choose a set of soft-thresholding powers
+#powers = c(c(1:10), seq(from = 12, to=20, by=2))
+powers = c(seq(4,10,by=1), seq(12,20, by=2))
+
+# Call the network topology analysis function
+# Using biweight mid-correlation instead of default Pearson
+sft = pickSoftThreshold(datExpr_red, 
+                        powerVector = powers, 
+                        corFnc = bicor,
+                        networkType = "signed",
+                        verbose = 5)
+
+# Plot the results:
+pdf(file = "Soft_Threshold_bicor.pdf", width = 8, height = 8)
+par(mfrow = c(1,2));
+cex1 = 0.9;
+# Scale-free topology fit index as a function of the soft-thresholding power
+plot(sft$fitIndices[,1], -sign(sft$fitIndices[,3])*sft$fitIndices[,2],
+     xlab="Soft Threshold (power)",ylab="Scale Free Topology Model Fit,signed R^2",type="n",
+     main = paste("Scale independence"),
+     ylim=c(0,1.0));
+text(sft$fitIndices[,1], -sign(sft$fitIndices[,3])*sft$fitIndices[,2],
+     labels=powers,cex=cex1,col="red");
+# this line corresponds to using an R^2 cut-off of h
+abline(h=0.90,col="red")
+
+# Mean connectivity as a function of the soft-thresholding power
+plot(sft$fitIndices[,1], sft$fitIndices[,5],
+     xlab="Soft Threshold (power)",ylab="Mean Connectivity", type="n",
+     main = paste("Mean connectivity"))
+text(sft$fitIndices[,1], sft$fitIndices[,5], labels=powers, cex=cex1,col="red")
+
+dev.off()
+
+#### Choose value of 12 - lowest power for which scale-free topology fit index reaches 0.9
+#### topology index doesn't quite reach 0.9 however
+
+#### Does this value show a network that exhibits scale free topology?
+k=softConnectivity(datE=datExpr_red,power=12)
+# softConnectivity: FYI: connecitivty of genes with less than 34 valid samples will be returned as NA.
+
+# Plot a histogram of k and a scale free topology plot
+pdf(file = "k and scale free topology.pdf", width = 8, height = 8)
+par(mfrow=c(1,2))
+hist(k)
+scaleFreePlot(k, main="Check scale free topology\n")
+dev.off()
