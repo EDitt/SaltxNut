@@ -1,6 +1,6 @@
 #### WGCNA ANALYSES ####
 
-#srun --pty  -p inter_p  --mem=50G --nodes=1 --ntasks-per-node=8 --time=6:00:00 --job-name=qlogin /bin/bash -l
+#srun --pty  -p inter_p  --mem=100G --nodes=1 --ntasks-per-node=8 --time=6:00:00 --job-name=qlogin /bin/bash -l
 #module load R/4.0.0-foss-2019b
 #R
 
@@ -8,8 +8,6 @@
 ######## SETUP ##########
 #########################
 
-library(DESeq2)
-library(tximport)
 library(WGCNA)
 source("Functions.R")
 
@@ -18,20 +16,33 @@ setwd("/scratch/eld72413/Salty_Nut/CultivatedOnly/DE_Analyses_Inbred")
 ### To parallelize:
 library("BiocParallel")
 register(MulticoreParam(8)) #register cores so can specify parallel=TRUE when need to parallelize. Need to increase memory if increasing cores.
-#here I used 8 cores and 50 gb memory/core
+#here I used 8 cores and 50 gb memory/core - > later changed to 100 gb memory
 
+library(pryr) # to check how much memory is being used
 
 #############################
 ##### LOAD DATA OBJECTS #####
 #############################
 
 load("multiExpr.RData")
-exprSize = checkSets(multiExpr)
+checkSets(multiExpr)
+
+nSets = checkSets(multiExpr)$nSets
+
+load("Consensus-dataInput.RData")
+nGenes
+nSamples
+setLabels
+shortLabels
 exprSize
+
+head(Traits)
+
 
 ###############################
 # CHOOSE SOFT-THRESHOLD POWER #
 ###############################
+
 # library(cluster) do I need this?
 
 ### to multi-thread
@@ -41,13 +52,14 @@ enableWGCNAThreads(nThreads = 8)
 # Co-expression similarity is transformed into adjacency (raised to power of beta for weighted network)
 # soft-threshold power is a trade-off between scale free topology and mean connectivity
 
+powers = c(seq(4,10,by=1), seq(12,20, by=2))
+
 # Initialize a list to hold the results of scale-free analysis
-powerTables = vector(mode = "list", length = nSets);
+powerTables = vector(mode = "list", length = nSets)
 # Call the network topology analysis function for each set in turn
 for (set in 1:nSets)
-powerTables[[set]] = list(data = pickSoftThreshold(multiExpr[[set]]$data, powerVector=powers,
-verbose = 2)[[2]]);
-collectGarbage();
+powerTables[[set]] = list(data = pickSoftThreshold(multiExpr[[set]]$data, powerVector=powers, networkType = "signed", verbose = 2)[[2]]) # didn't have networkType = "signed" at first
+collectGarbage()
 
 # Plot the results:
 colors = c("black", "red")
@@ -67,7 +79,7 @@ ylim[2, col] = max(ylim[2, col], powerTables[[set]]$data[, plotCols[col]], na.rm
 }
 
 # Plot the quantities in the chosen columns vs. the soft thresholding power
-pdf(file = "Consensus_Network/Network_thresholds.pdf", width = 8, height = 8)
+pdf(file = "Consensus_Network/Network_thresholds_signed.pdf", width = 8, height = 8)
 par(mfcol = c(2,2));
 par(mar = c(4.2, 4.2 , 2.2, 0.5))
 cex1 = 0.7;
@@ -95,50 +107,178 @@ legend("topright", legend = setLabels, col = colors, pch = 20) ;
 }
 dev.off()
 
-# stopping point for now
-
 ################################
 #### CALCULATE ADJACENCIES #####
 ################################
 
 ### Define beta and calculate adjacency using the soft thresholding power 12
-softPower = 
-adjacency = adjacency(datExpr_red,
-                      type = "signed",
-                      power = softPower,
-                      corFnc = bicor)
+softPower = 5
 
+# Initialize an appropriate array to hold the adjacencies
+adjacencies = array(0, dim = c(nSets, nGenes, nGenes))
+
+# Calculate adjacencies in each individual data set
+#for (set in 1:nSets)
+#adjacencies[set, , ] = adjacency(multiExpr[[set]]$data,
+#                      type = "signed",
+#                      power = softPower,
+#                      corFnc = bicor)
+
+# alternative? Does this do the same thing? It is more similar to code in manual
+# In adjacency function documentation:
+# for type = "unsigned", adjacency = |cor| ^ power
+# for type = "signed", adjacency = (0.5 * (1 + cor)) ^ power
+
+for (set in 1:nSets)
+adjacencies[set, , ] = (0.5 * (1 + bicor(multiExpr[[set]]$data, 
+                                             maxPOutliers = 0.1,
+                                             pearsonFallback = "individual",
+                                             nThreads = 8))) ^softPower
+
+# code from manual to calculate adjacencies:
+#for (set in 1:nSets)
+#adjacencies[set, , ] = abs(cor(multiExpr[[set]]$data, use = "p"))^softPower
+
+# Recommendations from FAQs:
+# "signed is preferred". Use `type = "signed"`
+# default correlation is Pearson. In general, they recommend the biweight mid-correlation
+
+#  Warning messages:
+#  1: In (function (x, y = NULL, robustX = TRUE, robustY = TRUE, use = "all.obs",  :
+#    bicor: zero MAD in variable 'x'. Pearson correlation was used for individual columns with zero (or missing) MAD.
+#  2: In (function (x, y = NULL, robustX = TRUE, robustY = TRUE, use = "all.obs",  :
+#    bicor: zero MAD in variable 'x'. Pearson correlation was used for individual columns with zero (or missing) MAD.
+
+# in bicor documentation:
+# pearsonFallback - specifies whether the bicor calculation should revert to Pearson when median absolute deviation (mad) is zero. (Can be "none", "individual", "all"). 
+# If set to none, zero mad will result in NA for the corresponding correlation. If set to "individual", Pearson calculation will be used only for columns that have zero mad.
+
+# save(adjacencies, file="Consensus_Network/adjacencies.RData") # probably not worth saving because it takes longer to save than to calculate
+
+mem_used() # 19.2 GB
 
 ################################
 ## TOPOLOGICAL OVERLAP MATRIX ##
 ################################
 
 # transform adjacency into Topological Overlap Matrix to minimize effects of noise and spurious associations
-TOM = TOMsimilarity(adjacency)
+
+# Initialize an appropriate array to hold the TOMs
+TOM = array(0, dim = c(nSets, nGenes, nGenes))
+
+mem_used() # 38.2 GB
+
+# Calculate TOMs in each individual data set
+for (set in 1:nSets)
+TOM[set, , ] = TOMsimilarity(adjacencies[set, , ])
 ### this step takes awhile
+# crashed with only 50 gb memory
+# took ~ 90 min
 
-save(TOM, file = "TOM_Inbred.RData")
+object.size(TOM) # 18942567648 bytes
+format(object.size(TOM), units = "auto") # "17.6 Gb"
 
-load("TOM_Inbred.RData")
+save(TOM, file = "Consensus_Network/TOM_Inbred.RData")
 
-# calculate corresponding dissimilarity
-dissTOM = 1-TOM
+#load("Consensus_Network/TOM_Inbred.RData")
 
+ls()
+format(object.size(adjacencies), units = "auto") # "17.6 Gb"
+
+################################
+########## SCALE TOMs ##########
+################################
+
+# scale TOMs to make them comparable across sets
+# (different datasets have different statistical properties)
+
+# Define the reference percentile
+scaleP = 0.95
+
+# Set RNG seed for reproducibility of sampling
+set.seed(12345)
+
+# Sample sufficiently large number of TOM entries
+nSamples = as.integer(1/(1-scaleP) * 1000)
+
+# Choose the sampled TOM entries
+scaleSample = sample(nGenes*(nGenes-1)/2, size = nSamples)
+TOMScalingSamples = list()
+
+# These are TOM values at reference percentile
+scaleQuant = rep(1, nSets)
+
+# Scaling powers to equalize reference TOM values
+scalePowers = rep(1, nSets)
+
+# Loop over sets
+for (set in 1:nSets)
+{
+# Select the sampled TOM entries
+TOMScalingSamples[[set]] = as.dist(TOM[set, , ])[scaleSample]
+# Calculate the 95th percentile
+scaleQuant[set] = quantile(TOMScalingSamples[[set]],
+probs = scaleP, type = 8);
+# Scale the male TOM
+if (set>1)
+{
+scalePowers[set] = log(scaleQuant[1])/log(scaleQuant[set]);
+TOM[set, ,] = TOM[set, ,]^scalePowers[set];
+}
+}
+
+# the array TOM now contains the scaled TOMs. Form a quantile-quantile plot of the TOMs before and after scaling:
+
+# For plotting, also scale the sampled TOM entries
+scaledTOMSamples = list();
+for (set in 1:nSets)
+scaledTOMSamples[[set]] = TOMScalingSamples[[set]]^scalePowers[set]
+
+pdf(file = "Consensus_Network/TOMScaling-QQPlot.pdf", width = 6, height = 6);
+# qq plot of the unscaled samples
+qqUnscaled = qqplot(TOMScalingSamples[[1]], TOMScalingSamples[[2]], plot.it = TRUE, cex = 0.6,
+xlab = paste("TOM in", setLabels[1]), ylab = paste("TOM in", setLabels[2]),
+main = "Q-Q plot of TOM", pch = 20)
+# qq plot of the scaled samples
+qqScaled = qqplot(scaledTOMSamples[[1]], scaledTOMSamples[[2]], plot.it = FALSE)
+points(qqScaled$x, qqScaled$y, col = "red", cex = 0.6, pch = 20);
+abline(a=0, b=1, col = "blue")
+legend("topleft", legend = c("Unscaled TOM", "Scaled TOM"), pch = 20, col = c("black", "red"))
+dev.off()
+
+
+#############################
+## CALCULATE CONSENSUS TOM ##
+#############################
+
+consensusTOM = pmin(TOM[1, , ], TOM[2, , ])
+
+format(object.size(consensusTOM), units = "auto") # "8.8 Gb"
+rm(adjacencies)
+mem_used() # 28.7 GB
+
+save(consensusTOM, file = "Consensus_Network/ConsensusTOM.RData")
+load("Consensus_Network/ConsensusTOM.RData")
 
 #############################
 ## HIERARCHICAL CLUSTERING ##
 #############################
 
-# Call the hierarchical clustering function
-geneTree = hclust(as.dist(dissTOM), method = "average")
+# Clustering
+consTree = hclust(as.dist(1-consensusTOM), method = "average")
+format(object.size(consTree), units = "auto") # "674.3 Kb"
 
 # Plot the resulting clustering tree (dendrogram)
-pdf(file = "GeneTree.pdf", width = 8, height = 8)
-plot(geneTree, xlab="", sub="", main = "Gene clustering on TOM-based dissimilarity",
+pdf(file = "Consensus_Network/ConsensusTree.pdf", width = 8, height = 8)
+plot(consTree, xlab="", sub="", main = "Gene clustering on TOM-based dissimilarity",
      labels = FALSE, hang = 0.04)
 dev.off()
 
-#save(geneTree, file = "GeneTree.RData")
+save(consTree, file = "Consensus_Network/ConsensusTree.RData")
+
+load("Consensus_Network/ConsensusTree.RData")
+
+##################### stopping point
 
 #############################
 ### MODULE ID EXPLORATORY ###
@@ -146,14 +286,20 @@ dev.off()
 
 # explore deepSplit and pamStage parameters
 
+dissTOM = 1 - consensusTOM
+
 split = list(0,1,2,3,4)
 
-true_list <- lapply(split, function(x) {Module_ID(datExpr_red, geneTree, dissTOM, x, TRUE, 30) } )
+true_list <- lapply(split, function(x) {Module_ID(multiExpr, consTree, dissTOM, x, TRUE, 30) } )
+#Error in moduleEigengenes(dataframe, colors = dynamicColors) : 
+#  moduleEigengenes: Error: expr must be two-dimensional.
+
+
 true_df <- do.call("rbind", true_list)
 true_df$pam <- "TRUE"
 true_df$split <- c(0,1,2,3,4)
 
-false_list <- lapply(split, function(x) {Module_ID(datExpr_red, geneTree, dissTOM, x, FALSE, 30) } )
+false_list <- lapply(split, function(x) {Module_ID(multiExpr, consTree, dissTOM, x, FALSE, 30) } )
 false_df <- do.call("rbind", false_list)
 false_df$pam <- "FALSE"
 false_df$split <- c(0,1,2,3,4)
@@ -161,6 +307,9 @@ false_df$split <- c(0,1,2,3,4)
 df_module_results <- rbind(true_df, false_df)
 
 write.csv(df_module_results, 'TreeCutVary.csv')
+
+
+# previous results:
 
 # highest average % var explained is with deepsplit = 0, and pamStage = FALSE (61%)
 # >16k unassigned genes
@@ -389,3 +538,19 @@ par(mfrow=c(1,2))
 hist(k)
 scaleFreePlot(k, main="Check scale free topology\n")
 dev.off()
+
+
+################################
+#### CALCULATE ADJACENCIES #####
+################################
+
+# for one network:
+adjacency = adjacency(datExpr_red,
+                      type = "signed",
+                      power = softPower,
+                      corFnc = bicor)
+
+TOM = TOMsimilarity(adjacency)
+
+# calculate corresponding dissimilarity
+dissTOM = 1-TOM
