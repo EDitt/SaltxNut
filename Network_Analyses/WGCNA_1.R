@@ -8,6 +8,18 @@ setwd("/scratch/eld72413/Salty_Nut/CultivatedOnly/DE_Analyses_Inbred")
 
 # needed to install WGCNA- created a ~.Renviron file to specify location
 install.packages('WGCNA')
+
+### after errors in calculating eigengenes (even with tutorial), tried re-installing WGCNA with a diff version of R
+# module load R/3.6.2-foss-2019b
+# module load R/3.5.0-foss-2019b <- installed WGCNA in this version
+# when I first tried to re-install WGCNA, I was warned of a non-zero exit status. I then used:
+install.packages("BiocManager")
+BiocManager::install("WGCNA")
+
+# also realized that when I do library(WGCNA) it says the following objects are masked from 'package:stats': hclust, cor
+# I think the first time it only listed cor here?
+# This did not fix the problem
+
 #########################
 ######## SETUP ##########
 #########################
@@ -281,7 +293,32 @@ exprSize # n samples = 50 , 53 (1 removed from the RHA dataset)
 save(multiExpr, file = "multiExpr.RData")
 
 
+#############################
+######## TRAIT DATA #########
+#############################
 
+# traits of interest:
+# 3=bench, 6=osmocote, 7=salt, 8=treatment, 14=accession, 17=group, 21=transplant date, 23=chlorophyll, 31= totAG, 32=totBG, 33=total, 42= reproductive, 43=sampleday, 
+traits <- metadata_cult[,c(2,3,6:8,14,17,21,23,31:33,42,43)]
+traits$Accession <- make.names(traits$Accession) # syntactically valid names
+
+# Form a multi-set structure that will hold the clinical traits.
+Traits = vector(mode="list", length = nSets)
+for (set in 1:nSets)
+{
+setSamples = rownames(multiExpr[[set]]$data);
+traitRows = match(setSamples, traits$Plant);
+Traits[[set]] = list(data = traits[traitRows, -1]);
+rownames(Traits[[set]]$data) = traits[traitRows, 1];
+}
+
+collectGarbage()
+
+# Define data set dimensions
+nGenes = exprSize$nGenes
+nSamples = exprSize$nSamples
+
+save(Traits, nGenes, nSamples, setLabels, shortLabels, exprSize, file = "Consensus-dataInput.RData")
 
 
 ################## Archived
@@ -307,7 +344,3 @@ plotDendroAndColors(sampleTree_groups$RHA, traitColors,
                         groupLabels = names(y_model_plot_groups$RHA),
                         main = "Sample dendrogram RHA")
 dev.off()
-
-# sample 56 no longer looks like an outlier when groups are plotted separately
-
-# did not remove any more outliers

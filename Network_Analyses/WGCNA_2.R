@@ -2,7 +2,12 @@
 
 #srun --pty  -p inter_p  --mem=100G --nodes=1 --ntasks-per-node=8 --time=6:00:00 --job-name=qlogin /bin/bash -l
 #module load R/4.0.0-foss-2019b
+#module load R/3.6.2-foss-2019b
+# ls /apps/eb/R/3.6.2-foss-2019b/lib64/R/library
 #R
+
+srun --pty -p inter_p --mem=50G --nodes=1 --ntasks-per-node=1 --constraint=Intel --time=12:00:00 --job-name=qlogin /bin/bash -l
+srun --pty -p batch --mem=2G --nodes=1 --ntasks-per-node=1 --constraint=EPYC --time=12:00:00 --job-name=qlogin /bin/bash -l
 
 #########################
 ######## SETUP ##########
@@ -19,6 +24,8 @@ register(MulticoreParam(8)) #register cores so can specify parallel=TRUE when ne
 #here I used 8 cores and 50 gb memory/core - > later changed to 100 gb memory
 
 library(pryr) # to check how much memory is being used
+
+options(stringsAsFactors = FALSE)
 
 #############################
 ##### LOAD DATA OBJECTS #####
@@ -112,17 +119,17 @@ dev.off()
 ################################
 
 ### Define beta and calculate adjacency using the soft thresholding power 12
-softPower = 5
+softPower = 12
 
 # Initialize an appropriate array to hold the adjacencies
 adjacencies = array(0, dim = c(nSets, nGenes, nGenes))
 
-# Calculate adjacencies in each individual data set
-#for (set in 1:nSets)
-#adjacencies[set, , ] = adjacency(multiExpr[[set]]$data,
-#                      type = "signed",
-#                      power = softPower,
-#                      corFnc = bicor)
+# Calculate adjacencies in each individual data set (this is what I used)
+for (set in 1:nSets)
+adjacencies[set, , ] = adjacency(multiExpr[[set]]$data,
+                      type = "signed",
+                      power = softPower,
+                      corFnc = bicor)
 
 # alternative? Does this do the same thing? It is more similar to code in manual
 # In adjacency function documentation:
@@ -170,17 +177,20 @@ mem_used() # 38.2 GB
 
 # Calculate TOMs in each individual data set
 for (set in 1:nSets)
-TOM[set, , ] = TOMsimilarity(adjacencies[set, , ])
+TOM[set, , ] = TOMsimilarity(adjacencies[set, , ],
+     TOMType = "signed",
+     verbose = 2)
+#              - need to specify networktype=signed
 ### this step takes awhile
 # crashed with only 50 gb memory
-# took ~ 90 min
+# took < 90 min
 
 object.size(TOM) # 18942567648 bytes
 format(object.size(TOM), units = "auto") # "17.6 Gb"
 
-save(TOM, file = "Consensus_Network/TOM_Inbred.RData")
+save(TOM, file = "Consensus_Network/TOM_Inbred_signed.RData")
 
-#load("Consensus_Network/TOM_Inbred.RData")
+load("Consensus_Network/TOM_Inbred_signed.RData")
 
 ls()
 format(object.size(adjacencies), units = "auto") # "17.6 Gb"
@@ -219,7 +229,7 @@ TOMScalingSamples[[set]] = as.dist(TOM[set, , ])[scaleSample]
 # Calculate the 95th percentile
 scaleQuant[set] = quantile(TOMScalingSamples[[set]],
 probs = scaleP, type = 8);
-# Scale the male TOM
+# Scale the RHA TOM
 if (set>1)
 {
 scalePowers[set] = log(scaleQuant[1])/log(scaleQuant[set]);
@@ -234,7 +244,7 @@ scaledTOMSamples = list();
 for (set in 1:nSets)
 scaledTOMSamples[[set]] = TOMScalingSamples[[set]]^scalePowers[set]
 
-pdf(file = "Consensus_Network/TOMScaling-QQPlot.pdf", width = 6, height = 6);
+pdf(file = "Consensus_Network/TOMScaling-QQPlot_signed.pdf", width = 6, height = 6);
 # qq plot of the unscaled samples
 qqUnscaled = qqplot(TOMScalingSamples[[1]], TOMScalingSamples[[2]], plot.it = TRUE, cex = 0.6,
 xlab = paste("TOM in", setLabels[1]), ylab = paste("TOM in", setLabels[2]),
@@ -257,8 +267,8 @@ format(object.size(consensusTOM), units = "auto") # "8.8 Gb"
 rm(adjacencies)
 mem_used() # 28.7 GB
 
-save(consensusTOM, file = "Consensus_Network/ConsensusTOM.RData")
-load("Consensus_Network/ConsensusTOM.RData")
+save(consensusTOM, file = "Consensus_Network/ConsensusTOM_signed.RData")
+load("Consensus_Network/ConsensusTOM_signed.RData")
 
 #############################
 ## HIERARCHICAL CLUSTERING ##
@@ -269,16 +279,84 @@ consTree = hclust(as.dist(1-consensusTOM), method = "average")
 format(object.size(consTree), units = "auto") # "674.3 Kb"
 
 # Plot the resulting clustering tree (dendrogram)
-pdf(file = "Consensus_Network/ConsensusTree.pdf", width = 8, height = 8)
+pdf(file = "Consensus_Network/ConsensusTree_signed.pdf", width = 8, height = 8)
 plot(consTree, xlab="", sub="", main = "Gene clustering on TOM-based dissimilarity",
      labels = FALSE, hang = 0.04)
 dev.off()
 
-save(consTree, file = "Consensus_Network/ConsensusTree.RData")
+save(consTree, file = "Consensus_Network/ConsensusTree_signed.RData")
 
-load("Consensus_Network/ConsensusTree.RData")
+load("Consensus_Network/ConsensusTree_signed.RData")
 
 ##################### stopping point
+
+
+###### Archive (before I made separate networks for HA & RHA)
+#####
+# Choose a set of soft-thresholding powers
+#powers = c(c(1:10), seq(from = 12, to=20, by=2))
+powers = c(seq(4,10,by=1), seq(12,20, by=2))
+
+# Call the network topology analysis function
+# Using biweight mid-correlation instead of default Pearson
+sft = pickSoftThreshold(datExpr_red, 
+                        powerVector = powers, 
+                        corFnc = bicor,
+                        networkType = "signed",
+                        verbose = 5)
+
+# Plot the results:
+pdf(file = "Soft_Threshold_bicor.pdf", width = 8, height = 8)
+par(mfrow = c(1,2));
+cex1 = 0.9;
+# Scale-free topology fit index as a function of the soft-thresholding power
+plot(sft$fitIndices[,1], -sign(sft$fitIndices[,3])*sft$fitIndices[,2],
+     xlab="Soft Threshold (power)",ylab="Scale Free Topology Model Fit,signed R^2",type="n",
+     main = paste("Scale independence"),
+     ylim=c(0,1.0));
+text(sft$fitIndices[,1], -sign(sft$fitIndices[,3])*sft$fitIndices[,2],
+     labels=powers,cex=cex1,col="red");
+# this line corresponds to using an R^2 cut-off of h
+abline(h=0.90,col="red")
+
+# Mean connectivity as a function of the soft-thresholding power
+plot(sft$fitIndices[,1], sft$fitIndices[,5],
+     xlab="Soft Threshold (power)",ylab="Mean Connectivity", type="n",
+     main = paste("Mean connectivity"))
+text(sft$fitIndices[,1], sft$fitIndices[,5], labels=powers, cex=cex1,col="red")
+
+dev.off()
+
+#### Choose value of 12 - lowest power for which scale-free topology fit index reaches 0.9
+#### topology index doesn't quite reach 0.9 however
+
+#### Does this value show a network that exhibits scale free topology?
+k=softConnectivity(datE=datExpr_red,power=12)
+# softConnectivity: FYI: connecitivty of genes with less than 34 valid samples will be returned as NA.
+
+# Plot a histogram of k and a scale free topology plot
+pdf(file = "k and scale free topology.pdf", width = 8, height = 8)
+par(mfrow=c(1,2))
+hist(k)
+scaleFreePlot(k, main="Check scale free topology\n")
+dev.off()
+
+
+################################
+#### CALCULATE ADJACENCIES #####
+################################
+
+# for one network:
+adjacency = adjacency(datExpr_red,
+                      type = "signed",
+                      power = softPower,
+                      corFnc = bicor)
+
+TOM = TOMsimilarity(adjacency)
+
+# calculate corresponding dissimilarity
+dissTOM = 1-TOM
+
 
 #############################
 ### MODULE ID EXPLORATORY ###
@@ -485,72 +563,3 @@ write.csv(MExp, file = "ModExpression_pamTRUE.csv")
 
 ### Module Eigengenes:
 signif(cor(datME, use="p"), 2) #how correlated are modules
-
-
-
-
-###### Archive (before I made separate networks for HA & RHA)
-#####
-# Choose a set of soft-thresholding powers
-#powers = c(c(1:10), seq(from = 12, to=20, by=2))
-powers = c(seq(4,10,by=1), seq(12,20, by=2))
-
-# Call the network topology analysis function
-# Using biweight mid-correlation instead of default Pearson
-sft = pickSoftThreshold(datExpr_red, 
-                        powerVector = powers, 
-                        corFnc = bicor,
-                        networkType = "signed",
-                        verbose = 5)
-
-# Plot the results:
-pdf(file = "Soft_Threshold_bicor.pdf", width = 8, height = 8)
-par(mfrow = c(1,2));
-cex1 = 0.9;
-# Scale-free topology fit index as a function of the soft-thresholding power
-plot(sft$fitIndices[,1], -sign(sft$fitIndices[,3])*sft$fitIndices[,2],
-     xlab="Soft Threshold (power)",ylab="Scale Free Topology Model Fit,signed R^2",type="n",
-     main = paste("Scale independence"),
-     ylim=c(0,1.0));
-text(sft$fitIndices[,1], -sign(sft$fitIndices[,3])*sft$fitIndices[,2],
-     labels=powers,cex=cex1,col="red");
-# this line corresponds to using an R^2 cut-off of h
-abline(h=0.90,col="red")
-
-# Mean connectivity as a function of the soft-thresholding power
-plot(sft$fitIndices[,1], sft$fitIndices[,5],
-     xlab="Soft Threshold (power)",ylab="Mean Connectivity", type="n",
-     main = paste("Mean connectivity"))
-text(sft$fitIndices[,1], sft$fitIndices[,5], labels=powers, cex=cex1,col="red")
-
-dev.off()
-
-#### Choose value of 12 - lowest power for which scale-free topology fit index reaches 0.9
-#### topology index doesn't quite reach 0.9 however
-
-#### Does this value show a network that exhibits scale free topology?
-k=softConnectivity(datE=datExpr_red,power=12)
-# softConnectivity: FYI: connecitivty of genes with less than 34 valid samples will be returned as NA.
-
-# Plot a histogram of k and a scale free topology plot
-pdf(file = "k and scale free topology.pdf", width = 8, height = 8)
-par(mfrow=c(1,2))
-hist(k)
-scaleFreePlot(k, main="Check scale free topology\n")
-dev.off()
-
-
-################################
-#### CALCULATE ADJACENCIES #####
-################################
-
-# for one network:
-adjacency = adjacency(datExpr_red,
-                      type = "signed",
-                      power = softPower,
-                      corFnc = bicor)
-
-TOM = TOMsimilarity(adjacency)
-
-# calculate corresponding dissimilarity
-dissTOM = 1-TOM

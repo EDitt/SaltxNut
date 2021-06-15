@@ -309,6 +309,48 @@ Module_Cluster <- function(MEDissThres, datExpr, dynamicColors) {
   return(Result)
 }
 
+# function to vary "deepSplit" and "pamStage" paramters for a consensus tree:
+Module_ID_multiExpr <- function(dataframe, GeneTree, TOMdiss, split, pam, minModuleSize) {
+dynamicMods = cutreeDynamic(dendro = GeneTree, distM = TOMdiss,
+              method = "hybrid",
+              #cutHeight = , default for "hybrid" is 99% of range between 5th percentile and joining heights of dendrogram
+                            deepSplit = split,  #from 0-4
+                            pamRespectsDendro = FALSE,
+                            minClusterSize = minModuleSize,
+                            pamStage = pam)
+Mods_Genes <- as.data.frame(table(dynamicMods))
+UnAssigned <- ifelse(Mods_Genes[1,1] == 0, Mods_Genes[1,2], "NA")
+Mods_Genes_noZero <- subset(Mods_Genes, Mods_Genes[,1]!=0)
+dynamicColors = labels2colors(dynamicMods)
+MEList = multiSetMEs(dataframe, colors = NULL, universalColors = dynamicColors)
+datVA1 <- MEList[[1]]$varExplained
+df1 <- data.frame(matrix(unlist(datVA1), nrow=length(datVA1), byrow=T))
+datVA2 <- MEList[[2]]$varExplained
+df2 <- data.frame(matrix(unlist(datVA2), nrow=length(datVA2), byrow=T))
+df_all <- cbind(df1, df2)
+df_all$AveVarExp <- (df_all[,1] + df_all[,2]) / 2
+df_noMin <- subset(df_all, df_all$AveVarExp != min(df_all$AveVarExp)) # for values that don't include "Grey" modules
+ValueList <- data.frame("NumMods" = length(Mods_Genes_noZero$Freq), "NumUnAssigned" = UnAssigned, 
+  "MeanGeneNum" = mean(Mods_Genes_noZero[,2]), "MinGeneNum" = min(Mods_Genes_noZero[,2]),  
+  "MaxGeneNum" = max(Mods_Genes_noZero[,2]), "MeanVarExp" = mean(df_all$AveVarExp), "MeanVarExp_noMin" = mean(df_noMin$AveVarExp),
+  "MinVarExp" = min(df_all$AveVarExp), "MinVarExp_noMin" = min(df_noMin$AveVarExp),  "MaxVarExp" = max(df_all$AveVarExp))
+return(ValueList)
+}
+
+Module_Cluster_multiExpr <- function(MEDissThres, multiExpr, unmergedLabels) {
+  merge = mergeCloseModules(multiExpr, unmergedLabels, cutHeight = MEDissThres, verbose = 3)
+  datVA1 <- merge$newMEs[[1]]$varExplained
+  df1 <- data.frame(matrix(unlist(datVA1), nrow=length(datVA1), byrow=T))
+  datVA2 <- merge$newMEs[[2]]$varExplained
+  df2 <- data.frame(matrix(unlist(datVA2), nrow=length(datVA2), byrow=T))
+  df_all <- cbind(df1, df2)
+  df_all$AveVarExp <- (df_all[,1] + df_all[,2]) / 2
+  Metric <- c("NumMods", "MeanVarExp", "MinVarExp", "MaxVarExp")
+  Value <- c(length(df_all$AveVarExp), mean(df_all$AveVarExp), min(df_all$AveVarExp), max(df_all$AveVarExp))
+  Result <- data.frame(Metric, Value)
+  return(Result)
+}
+
 # Function to look at Module-Trait Correlations
 Module_Trait_Corr <- function(TraitData, model, modEigenvalues, NumSamples) {
   datTraits <- as.data.frame(model.matrix(model, data=TraitData))
