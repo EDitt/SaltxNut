@@ -153,19 +153,17 @@ for (i in 1:length(Threshold)) {
 
 write.csv(df_module_results, 'VariableCutThreshold_PAMFALSE_split2.csv')
 
-### cutting at 0.15 reduces % variance explained to 0.5355 and 89 genes (from 0.55)
-
-
+### cutting at 0.15 reduces % variance explained to 0.5355 and 89 modules (from 0.55 and 94 modules)
 
 #############################
 ### MERGE SIMILAR MODULES ###
 #############################
 
-merge = mergeCloseModules(multiExpr, unmergedLabels, cutHeight = 0.25, verbose = 3)
+merge = mergeCloseModules(multiExpr, unmergedColors, cutHeight = 0.15, verbose = 3)
 #
 names(merge$newMEs[[1]])
 # see 'moduleEigengenes' function for explanation
-# data - not sure what this is? (for each individual in each module)
+# data - not sure what this is? (for each individual in each module) <- is this the eigengene?
 # average expression (for each individual in each module)
 # variance explained - for each module
 # nPC = 1 (not sure what that means), validMEs (all TRUE), validColors
@@ -174,12 +172,14 @@ names(merge$newMEs[[1]])
 
 # Numeric module labels
 moduleLabels = merge$colors
+
 # Convert labels to colors
-moduleColors = labels2colors(moduleLabels)
+#moduleColors = labels2colors(moduleLabels) # no longer need since I used 'unmergedColors' instead of 'unmergedLabels' in merge function
+
 # Eigengenes of the new merged modules:
 consMEs = merge$newMEs
 
-pdf(file = "Results/ConsensusTree_MergedModsSplit2_dendro.pdf", width = 9, height = 6)
+pdf(file = "Results/ConsensusTree_MergedModsSplit2_Cut0.15.pdf", width = 9, height = 6)
 plotDendroAndColors(consTree, cbind(unmergedColors, moduleColors),
 c("Unmerged", "Merged"),
 dendroLabels = FALSE, hang = 0.03,
@@ -187,21 +187,59 @@ addGuide = TRUE, guideHang = 0.05)
 dev.off()
 
 # save
-save(merge, file = "Merge_Split2_pamFALSE_cut.RData")
-save(consMEs, moduleColors, moduleLabels, consTree, file = "Consensus-NetworkConstruction-man.RData")
+save(merge, file = "Merge_Split2_pamFALSE_cut0.15.RData")
+save(consMEs, moduleLabels, consTree, file = "Consensus-NetworkConstruction-man.RData")
+
+
+# Calculate consensus dissimilarity of merged consensus module eigengenes
+consMEDiss_merge = consensusMEDissimilarity(consMEs)
+# Cluster merged consensus modules
+consMETree_merge = hclust(as.dist(consMEDiss_merge), method = "average")
+
+# plot new modules
+pdf(file = "Results/MergedModsSplit2_Cut0.15.pdf", width = 9, height = 6)
+par(mfrow = c(1,1))
+plot(consMETree_merge, main = "Consensus clustering of consensus (merged) module eigengenes",
+xlab = "", sub = "")
+abline(h=0.15, col = "red")
+dev.off()
 
 #############################
 #### OUTPUT MODULE INFO #####
 #############################
 
-### module expression and eigengene info
-write.csv(consMEs, file = "ModEigengenes_Consensus.csv")
+### module eigengene info
+Eigengenes_Group1 <- consMEs[[1]]$data
+Eigengenes_Group1$Sample <- rownames(Eigengenes_Group1)
+Eigengenes_Group2 <- consMEs[[2]]$data
+Eigengenes_Group2$Sample <- rownames(Eigengenes_Group2)
+Eigengenes_all <- rbind(Eigengenes_Group1, Eigengenes_Group2)
+
+write.csv(Eigengenes_all, file = "ModEigengenes_Consensus.csv", row.names = FALSE, quote = FALSE)
 # module eigengene is the first principal component of the expression matrix. The eigengene 
 # can be thought of as a weighted average expression profile
 
-MExp0 = moduleEigengenes(multiExpr, moduleColors)$averageExpr
+### module expression info
+Expression_Group1 <- consMEs[[1]]$averageExpr
+Expression_Group1$Sample <- rownames(Expression_Group1)
+
+Expression_Group2 <- consMEs[[2]]$averageExpr
+Expression_Group2$Sample <- rownames(Expression_Group2)
+
+Expression_all <- rbind(Expression_Group1, Expression_Group2)
+write.csv(Expression_all, file = "ModExpression_Consensus.csv", row.names = FALSE, quote = FALSE)
 # averageExpr is a df containing average normalized expression in each module
 
-MExp = orderMEs(MExp0) #not sure how these are ordered?
-#write.csv(MExp, file = "ModExpression_pamFALSE.csv")
-write.csv(MExp, file = "ModExpression_pamTRUE.csv") 
+### variance explained by each module
+VarExplained_1 <- consMEs[[1]]$varExplained
+VarExplained_2 <- consMEs[[2]]$varExplained
+VarExplained_1$Group <-c("HA")
+VarExplained_2$Group <-c("RHA")
+
+VarExplained_all <- rbind(VarExplained_1, VarExplained_2)
+write.csv(VarExplained_all, file = "ModVarExplained.csv", row.names = FALSE, quote = FALSE)
+
+####
+# do I need this?
+#MExp = orderMEs(MExp0) #not sure how these are ordered?
+
