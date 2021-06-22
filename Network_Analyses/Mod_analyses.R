@@ -20,24 +20,27 @@ library(RColorBrewer)
 #########################
 
 ModEGs <- read.csv("/Users/emilydittmar/Google Drive/Active Projects/Transcriptomics_Exp/Analyses/WGCNA/ConsensusNetwork_June2021/ModEigengenes_Consensus.csv", header=T)
+ModEGs <- read.csv("/Users/eld72413/Google Drive/Active Projects/Transcriptomics_Exp/Analyses/WGCNA/ConsensusNetwork_June2021/ModEigengenes_Consensus.csv", header=T)
 colnames(ModEGs)[length(ModEGs)] <- "Plant" # last column is plant ID
 
 ModExp <- read.csv("/Users/emilydittmar/Google Drive/Active Projects/Transcriptomics_Exp/Analyses/WGCNA/ConsensusNetwork_June2021/ModExpression_Consensus.csv", header=T)
-colnames(ModEGs)[length(ModEGs)] <- "Plant"
+ModExp <- read.csv("/Users/eld72413/Google Drive/Active Projects/Transcriptomics_Exp/Analyses/WGCNA/ConsensusNetwork_June2021/ModExpression_Consensus.csv", header=T)
+colnames(ModExp)[length(ModExp)] <- "Plant"
 
 Design <- read.csv("DataFiles/StudyDesign_Inbred_noOut.csv", header=T)
 
-Design$Treatment <- relevel(Design$Treatment, ref="Control")
+Design$Treatment <- relevel(as.factor(Design$Treatment), ref="Control")
 
 levels(Design$Treatment)
 Design$Accession <- as.factor(make.names(Design$Accession))
 levels(Design$Accession)
-levels(Design$Group)
+Design$Group <- as.factor(Design$Group)
 Design$SampleDay <- factor(Design$SampleDay)
 levels(Design$SampleDay)
 Design$Bench <- factor(Design$Bench)
 levels(Design$Bench)
 levels(Design$Group)
+Design$Reproductive <- factor(Design$Reproductive)
 levels(Design$Reproductive)
 
 ## samples per accssion:
@@ -314,56 +317,94 @@ aggregate(AllData$Plant, by=list(AllData$Nut, AllData$Salt, AllData$Treatment), 
 
 lm_FUN2 <- function(Yvar, dataset) {
   mod1 <- lm(Yvar ~ Nut + Salt + Nut:Salt +
-               Group + Group:Cross + SampleDay, data = dataset)
+               Group + Group:Accession + 
+               Reproductive +
+               SampleDay +
+               Bench, data = dataset)
   result <- drop1(mod1, test = "Chi")
   return(result[3,5])
 }
 
-result2 <- lapply (AllData[,c(15:85)], function(x) {lm_FUN2(x, AllData) })
+critp <- 0.05/length(AllData[,c(17:104)])
+# Sidak correction:
+critp2 <- 1 - (1-0.05)^(1/length(AllData[,c(17:104)]))
+
+result2 <- lapply (AllData[,c(17:104)], function(x) {lm_FUN2(x, AllData) })
 str(result2)
-length(which(result2 < critp)) # N=21
-which(result2 < critp)
-NutxSalt <- names(which(result2 < critp))  ### NutxSalt modules
+length(which(result2 < critp)) # N=0 Is bonferroni too stringent?
+length(which(result2 < 0.05)) # N=11
+length(which(result2 < 0.01)) # N=3
+which(result2 < 0.05)
+NutxSalt <- names(which(result2 < 0.05))  ### NutxSalt modules
+length(NutxSalt)
 
 ### main effects
 # take out Nut:Salt interaction
 
 lm_FUN3 <- function(Yvar, dataset) {
   mod1 <- lm(Yvar ~ Nut + Salt + 
-               Group + Group:Cross + SampleDay, data = dataset)
+               Group + Group:Accession + 
+               Reproductive +
+               SampleDay +
+               Bench, data = dataset)
   result <- drop1(mod1, test = "Chi")
   main_result <- data.frame("LowNutSig" = result[2,5], "HighSaltSig" = result[3,5])
   return(main_result)
 }
 
-result3 <- lapply (AllData[,c(15:85)], function(x) {lm_FUN3(x, AllData) })
+result3 <- lapply (AllData[,c(17:104)], function(x) {lm_FUN3(x, AllData) })
 str(result3)
 
-length(which(result3$LowNutSig < critp)) #0
-length(which(result3$HighSaltSig < critp)) #0
-
 Nut <- lapply (result3, function(x) {which(x$LowNutSig < critp) })
-length(which(Nut==1)) #40
+#Nut <- lapply (result3, function(x) {which(x$LowNutSig < 0.05) })
+length(which(Nut==1)) #72 for p<0.05, 55 for critp
 
 Salt <- lapply (result3, function(x) {which(x$HighSaltSig < critp) })
-length(which(Salt==1)) #19
+#Salt <- lapply (result3, function(x) {which(x$HighSaltSig < 0.05) })
+length(which(Salt==1)) #33 for p<0.05, 11 for critp)
 
 SaltMods <- names(which(Salt==1))
 NutMods <- names(which(Nut==1))
 
 both <- intersect(names(which(Salt==1)), names(which(Nut==1)))
-length(both) #N = 11
-Main_Inter <- intersect(Inter, both)
-length(Main_Inter) #N=11
+length(both) #N = 9
+Main_Inter <- intersect(NutxSalt, both)
+length(Main_Inter) #(N=3 only if I allow p<0.05 for interaction)
 
 ### Nutrient only
 Nut_only <- setdiff(names(which(Nut==1)), both)
-length(Nut_only) #29
+length(Nut_only) #46
 
 ### Salt only
 Salt_only <- setdiff(names(which(Salt==1)), both)
-length(Salt_only) #8
+length(Salt_only) #2
 
+### how many nutrient only or salt only have significant interactions?
+Nut_only_nointer <- setdiff(Nut_only, NutxSalt)
+length(Nut_only_nointer) # 41
 
+# nutrient & effected by interaction
+Nut_and_inter <- intersect(Nut_only, NutxSalt)
+length(Nut_and_inter) #5
 
+Salt_only_nointer <- setdiff(Salt_only, NutxSalt)
+length(Salt_only_nointer) # all bc 0 NutxSalt
+
+### how many are influenced by the interaction of Nut x Salt but not the main effect?
+InterOnly <- setdiff(NutxSalt, union(NutMods, SaltMods))
+length(InterOnly) # 5 if NutxSalt p value is 0.05
+
+############################
+# PLOT SIGNIFICANT MODULES #
+############################
+
+AllSigMods <- union(NutxSalt, union(NutMods, SaltMods))
+length(AllSigMods) # 62
+
+# transpose
+SigModEGs <- t(ModEGs[,c(AllSigMods)])
+
+consMETree = hclust(dist(SigModEGs), method = "average")
+plot(consMETree, main = "Consensus clustering of consensus module eigengenes",
+     xlab = "", sub = "")
 
