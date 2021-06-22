@@ -63,8 +63,8 @@ ModuleClustParameter$ConvertModNum <- ModuleClustParameter$ModuleNumber / 100
 
 p4g + geom_line(data = ModuleClustParameter, aes(y=ConvertModNum), lty=2) +
   geom_point(data = ModuleClustParameter, aes(y=ConvertModNum), pch=21) +
-  scale_y_continuous(sec.axis = sec_axis(~ .*1000, name= "Number of Modules"))
+  scale_y_continuous(sec.axis = sec_axis(~ .*100, name= "Number of Modules"))
 
-ggsave(filename = "ResultsFiles/Diagnostics/ModuleClustCut.png")
+ggsave(filename = "ResultsFiles/Coexpression/ModuleClustCut.png")
 
 
