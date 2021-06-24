@@ -57,13 +57,15 @@ str(AllData)
 AllData_long <- gather(AllData, Module, eigengeneExp, 
                        MEbisque4:MEdarkslateblue, factor_key = TRUE)
 head(AllData_long)
+str(AllData_long)
 
 #########################
 #### LINEAR MODEL #######
 #########################
 
-
-EigenExp <- lm(eigengeneExp ~ Treatment + Group + 
+EigenExp <- lm(eigengeneExp ~ 
+                 Treatment + 
+                 Group + 
                  Group:Accession + 
                  Module + 
                  Treatment:Module +
@@ -71,8 +73,9 @@ EigenExp <- lm(eigengeneExp ~ Treatment + Group +
                  SampleDay +
                  Bench, 
                data = AllData_long)
+summary(EigenExp)
 Anova(EigenExp) 
-drop1(EigenExp, test = "F") # reproductive is n.s.
+drop1(EigenExp, test = "F") # reproductive, sample day, bench is n.s., group x accession p = 0.076
 hist(resid(EigenExp))
 
 EigenMean <- emmeans(EigenExp, ~ Treatment | Module, type = "response")
@@ -303,108 +306,5 @@ Inter <- names(which(result < critp))
 
 
 
-##########################
-#### LIKELIHOOD RATIO ####
-##########################
 
-### make treatment 2 factors with 2 levels each
-
-AllData$Nut <- as.factor(ifelse(AllData$Treatment == "LowNut" | AllData$Treatment == "Combo", "1", "0"))
-AllData$Salt <- as.factor(ifelse(AllData$Treatment == "HighSalt" | AllData$Treatment == "Combo", "1", "0"))
-
-#check
-aggregate(AllData$Plant, by=list(AllData$Nut, AllData$Salt, AllData$Treatment), length)
-
-lm_FUN2 <- function(Yvar, dataset) {
-  mod1 <- lm(Yvar ~ Nut + Salt + Nut:Salt +
-               Group + Group:Accession + 
-               Reproductive +
-               SampleDay +
-               Bench, data = dataset)
-  result <- drop1(mod1, test = "Chi")
-  return(result[3,5])
-}
-
-critp <- 0.05/length(AllData[,c(17:104)])
-# Sidak correction:
-critp2 <- 1 - (1-0.05)^(1/length(AllData[,c(17:104)]))
-
-result2 <- lapply (AllData[,c(17:104)], function(x) {lm_FUN2(x, AllData) })
-str(result2)
-length(which(result2 < critp)) # N=0 Is bonferroni too stringent?
-length(which(result2 < 0.05)) # N=11
-length(which(result2 < 0.01)) # N=3
-which(result2 < 0.05)
-NutxSalt <- names(which(result2 < 0.05))  ### NutxSalt modules
-length(NutxSalt)
-
-### main effects
-# take out Nut:Salt interaction
-
-lm_FUN3 <- function(Yvar, dataset) {
-  mod1 <- lm(Yvar ~ Nut + Salt + 
-               Group + Group:Accession + 
-               Reproductive +
-               SampleDay +
-               Bench, data = dataset)
-  result <- drop1(mod1, test = "Chi")
-  main_result <- data.frame("LowNutSig" = result[2,5], "HighSaltSig" = result[3,5])
-  return(main_result)
-}
-
-result3 <- lapply (AllData[,c(17:104)], function(x) {lm_FUN3(x, AllData) })
-str(result3)
-
-Nut <- lapply (result3, function(x) {which(x$LowNutSig < critp) })
-#Nut <- lapply (result3, function(x) {which(x$LowNutSig < 0.05) })
-length(which(Nut==1)) #72 for p<0.05, 55 for critp
-
-Salt <- lapply (result3, function(x) {which(x$HighSaltSig < critp) })
-#Salt <- lapply (result3, function(x) {which(x$HighSaltSig < 0.05) })
-length(which(Salt==1)) #33 for p<0.05, 11 for critp)
-
-SaltMods <- names(which(Salt==1))
-NutMods <- names(which(Nut==1))
-
-both <- intersect(names(which(Salt==1)), names(which(Nut==1)))
-length(both) #N = 9
-Main_Inter <- intersect(NutxSalt, both)
-length(Main_Inter) #(N=3 only if I allow p<0.05 for interaction)
-
-### Nutrient only
-Nut_only <- setdiff(names(which(Nut==1)), both)
-length(Nut_only) #46
-
-### Salt only
-Salt_only <- setdiff(names(which(Salt==1)), both)
-length(Salt_only) #2
-
-### how many nutrient only or salt only have significant interactions?
-Nut_only_nointer <- setdiff(Nut_only, NutxSalt)
-length(Nut_only_nointer) # 41
-
-# nutrient & effected by interaction
-Nut_and_inter <- intersect(Nut_only, NutxSalt)
-length(Nut_and_inter) #5
-
-Salt_only_nointer <- setdiff(Salt_only, NutxSalt)
-length(Salt_only_nointer) # all bc 0 NutxSalt
-
-### how many are influenced by the interaction of Nut x Salt but not the main effect?
-InterOnly <- setdiff(NutxSalt, union(NutMods, SaltMods))
-length(InterOnly) # 5 if NutxSalt p value is 0.05
-
-############################
-# PLOT SIGNIFICANT MODULES #
-############################
-
-AllSigMods <- union(NutxSalt, union(NutMods, SaltMods))
-length(AllSigMods) # 62
-
-# transpose
-SigModEGs <- t(ModEGs[,c(AllSigMods)])
-
-consMETree = hclust(dist(SigModEGs), method = "average")
-plot(consMETree, main = "Consensus clustering of consensus module eigengenes",
-     xlab = "", sub = "")
 
