@@ -9,7 +9,6 @@ library(car)
 source("Functions.R")
 library(tidyr)
 library(emmeans)
-library(UpSetR)
 
 #########################
 ###### READ DATA ########
@@ -42,175 +41,179 @@ levels(Design$Reproductive)
 ## samples per accssion:
 aggregate(Design$Plant, by=list(Design$Accession, Design$Treatment), length)
 
+
 #########################
 ###### DATA SETUP #######
 #########################
 
-AllData <- merge(Design[,c(2:8, 14, 17, 18, 23, 31:33, 42, 43)], ModEGs, by="Plant")
+AllData <- merge(Design[,c(2:8, 14, 17, 18, 23, 31:33, 42, 43)], 
+                 ModEGs, by="Plant")
 str(AllData)
 
+levels(AllData$Osmocote)
+levels(AllData$Salt)
+
+# save spreadsheet
+write.csv(AllData, file="ResultsFiles/Coexpression/Module_EGs.csv", row.names = FALSE)
+
 ################################
-# LIKELIHOOD RATIO INTERACTION #
+### MODEL 2 TREATMENT FACTORS ###
 ################################
 
-### make treatment 2 factors with 2 levels each
-
-AllData$Nut <- as.factor(ifelse(AllData$Treatment == "LowNut" | AllData$Treatment == "Combo", "1", "0"))
-AllData$Salt <- as.factor(ifelse(AllData$Treatment == "HighSalt" | AllData$Treatment == "Combo", "1", "0"))
-
-#check
-aggregate(AllData$Plant, by=list(AllData$Nut, AllData$Salt, AllData$Treatment), length)
+### treatment 2 factors with 2 levels each
 
 LR_Mod <- function(Yvar, dataset) {
-  mod <- lm(Yvar ~ Nut + Salt + Nut:Salt +
-               Accession + 
-               Bench, data = dataset)
-  result <- as.data.frame(drop1(mod, test = "Chi"))
-  SigValues <-
-  data.frame("AccessionSig" = result["Nut","Pr(>Chi)"], 
-             "BenchSig" = result["Bench", "Pr(>Chi)"],
-             "NutxSaltSig" = result["Nut:Salt", "Pr(>Chi)"])
-  return(SigValues)
+  mod <- lm(Yvar ~ Osmocote + Salt +
+                Osmocote:Salt +
+                Accession +
+                Osmocote:Accession +
+                Salt:Accession +
+                Osmocote:Salt:Accession +
+                Bench, data = dataset,
+              contrast=list(Accession=contr.sum, Bench=contr.sum))
+  return(mod)
 }
 
-### change model to type iii to evaluate main effect in presence of interaction?
-LR_Mod2 <- lm(MEdarkmagenta ~ Osmocote + Salt +
-              Osmocote:Salt +
-              Accession +
-              Osmocote:Accession +
-              Salt:Accession +
-              Osmocote:Salt:Accession +
-              Bench, data = AllData,
-            contrast=list(Accession=contr.sum, Bench=contr.sum))
+
+##############################
+###### ANALYZE MODULES #######
+##############################
 
 LR_mod_results <- lapply (AllData[,c(17:104)], function(x) {LR_Mod(x, AllData) })
 str(LR_mod_results)
 
-critp <- 0.05/length(AllData[,c(17:104)])
-
-### modules that are significant for Bench:
-LRBench <- lapply (LR_mod_results, function(x) {which(x$BenchSig < critp) })
-length(which(LRBench==1)) #20
-LRBenchSigMods <- names(which(LRBench==1))
-
-### modules that are significant for Accession:
-Accession <- lapply (LR_mod_results, function(x) {which(x$AccessionSig < critp) })
-length(which(Accession==1)) #27
-AccessionSigMods <- names(which(Accession==1))
-
-### modules that are significant for Nut x Salt:
-NutxSalt <- lapply (LR_mod_results, function(x) {which(x$NutxSaltSig < critp) })
-length(which(NutxSalt==1)) #27
-NutxSaltSigMods <- names(which(NutxSalt==1))
-
-# how many modules significant for Nut x Salt are significant for accession and/or bench?
-VennNumbers(NutxSaltSigMods, AccessionSigMods, BenchSigMods)
-# 14 are significant for all, 13 are significant for Nut x Salt & Accession, 6 significant for bench only
+### ANOVA
+LR_mod_ANOVA <- lapply (LR_mod_results, function(x) {as.data.frame(Anova(x, test="F", type=2))})
 
 
-################################
-# LIKELIHOOD RATIO MAIN EFFECTS #
-################################
+##############################
+#### SAVE F and P-VALUES #####
+##############################
 
-### main effects
-# take out Nut:Salt interaction
-
-LR_Mod2 <- function(Yvar, dataset) {
-  mod <- lm(Yvar ~ Nut + Salt + 
-               Accession + 
-               Bench, data = dataset)
-  result <- drop1(mod, test = "Chi")
-  main_result <- data.frame("LowNutSig" = result["Nut","Pr(>Chi)"], "HighSaltSig" = result["Salt","Pr(>Chi)"])
-  return(main_result)
-}
-
-LR_mod_results2 <- lapply (AllData[,c(17:104)], function(x) {LR_Mod2(x, AllData) })
-str(LR_mod_results2)
-
-Nut <- lapply (LR_mod_results2, function(x) {which(x$LowNutSig < critp) })
-length(which(Nut==1)) #54
-
-Salt <- lapply (LR_mod_results2, function(x) {which(x$HighSaltSig < critp) })
-length(which(Salt==1)) #13
-
-SaltSigMods <- names(which(Salt==1))
-NutSigMods <- names(which(Nut==1))
-
-#########################
-######## OVERLAP ########
-#########################
-
-AllTreatMods <- union(NutxSaltSigMods, union(NutSigMods, SaltSigMods))
-length(AllTreatMods) #57
-
-Overlap <- GeneSets(NutxSaltSigMods, NutSigMods, SaltSigMods)
-
-lapply(Overlap, function(x) {length(x)})
-
-# 4 in common all
-# 21 NutxSalt & Nut
-# 7 Nut & Salt
-# 1 NutxSalt & Salt
-# 1 NutxSalt only
-# 22 Nut only
-# 1 Salt only
-
-# how many of the modules in these categories are also significant for Accession?
-
-AccessionOverlap <- lapply(Overlap, function(x) {intersect(x, AccessionSigMods)})
-
-lapply(AccessionOverlap, function(x) {length(x)})
-# 4 in common all
-# 21 NutxSalt & Nut
-# 0 Nut & Salt
-# 1 NutxSalt & Salt
-# 1 NutxSalt
-# 0 Nut only
-# 0 Salt only
-
-############################
-######## UPSET PLOT ########
-############################
-
-
-LR_list <- list(NutxSalt = NutxSaltSigMods, 
-                  NutMain = NutSigMods, 
-                  SaltMain = SaltSigMods,
-                  Accession = AccessionSigMods)
-
-upset(fromList(LR_list),
-      #keep.order = TRUE,
-      order.by = "freq",
-      #group.by = "sets", 
-      nsets = 13,
-      #empty.intersections = "on",
-      nintersects = 30)
-
-
-
-#######################
-
-
-############################
-# PLOT SIGNIFICANT MODULES #
-############################
-
-AllSigMods <- union(NutxSalt, union(NutMods, SaltMods))
-length(AllSigMods) # 57
+# select relevant info (F values & p values for factors of interest)
+Anova_columns <- lapply(LR_mod_ANOVA, function(x) {x[c(1:3,5),c(3,4)]})
+#Anova_columns <- lapply(LR_mod_ANOVA, function(x) {cbind(rownames(x[c(1:3,5),]), 
+#                                                         x[c(1:3,5),c(3,4)])})
 
 # transpose
-SigModEGs <- t(ModEGs[,c(AllSigMods)])
+Anova_wide <- lapply(Anova_columns, function(x) {as.data.frame(t(x))})
 
-consMETree = hclust(dist(SigModEGs), method = "average")
-plot(consMETree, main = "Consensus clustering of consensus module eigengenes",
-     xlab = "", sub = "")
+# add column for module identity
+Anova_widewLabels <-
+  lapply(names(Anova_wide), function(x) { Anova_wide[[x]]$Module <- x;return(Anova_wide[[x]])})
 
-# all modules
-AllModEGs <- t(ModEGs[-c(89,90)])
+# F values
+Anova_Fvals <- lapply(Anova_widewLabels, function(x) {x[1,]})
 
-AllconsMETree = hclust(dist(AllModEGs), method = "average")
-plot(AllconsMETree, main = "Consensus clustering of all module eigengenes",
-     xlab = "", sub = "")
+#combine into 1 df
+All_Fvals <- do.call("rbind", Anova_Fvals)
+colnames(All_Fvals) <- c("Nut_F", "Salt_F", "Accession_F", "NutxSalt_F", "Module")
 
+# p values
+Anova_pvals <- lapply(Anova_widewLabels, function(x) {x[2,]})
+
+#combine into 1 df
+All_pvals <- do.call("rbind", Anova_pvals)
+colnames(All_pvals) <- c("Nut_p", "Salt_p", "Accession_p", "NutxSalt_p", "Module")
+
+# merge
+Anova_results <- merge(All_Fvals, All_pvals, by="Module")
+
+##############################
+########## LS MEANS ##########
+##############################
+
+# going to calculate for all modules
+Mod_means <- lapply (LR_mod_results, 
+                             function(x) {emmeans(x, ~ Osmocote*Salt, type = "response")})
+# dataframe of all the means
+Mod_means_df <- lapply(Mod_means, function(x) {as.data.frame(x)[,c(1:4)]})
+
+Mod_meanswLabels <-
+  lapply(names(Mod_means_df), function(x) { Mod_means_df[[x]]$Module <- x;return(Mod_means_df[[x]])})
+
+All_ModMeans <- do.call("rbind", Mod_meanswLabels)
+
+# add treatment column
+All_ModMeans$Treatment <- ifelse(All_ModMeans$Osmocote == "High" &
+                                   All_ModMeans$Salt == "NoSalt",
+                                 "Control", ifelse(All_ModMeans$Osmocote == "High" &
+                                                     All_ModMeans$Salt == "Salt",
+                                                   "Salt", ifelse(All_ModMeans$Osmocote == "Low" &
+                                                                    All_ModMeans$Salt == "NoSalt",
+                                                                  "LowNut", "Combo")))
+
+
+# check
+aggregate(All_ModMeans$Module, by=list(All_ModMeans$Osmocote,
+                                       All_ModMeans$Salt, All_ModMeans$Treatment), length)
+
+# wide format
+All_ModMeans_wide <- reshape(All_ModMeans[,c(3:6)], idvar = "Module", timevar = "Treatment",
+                             direction = "wide")
+
+
+##############################
+###### PAIRWISE DIFFS ########
+##############################
+
+Mod_means_pairwisediffs <- lapply (Mod_means, 
+                                     function(x) {as.data.frame(pairs(x))})
+
+# better contrast labels
+Contrast_labels <- c("DE_Nut", "DE_Salt", "DE_Combo", "Nut-Salt", "Nut-Combo", "Salt-Combo")
+
+# dataframe of pairwise diffs
+Mod_means_pairwisediffs_df <- lapply(Mod_means_pairwisediffs, function(x) {
+  cbind(as.data.frame(x)[,c(2,3,6)], Contrast_labels)})
+
+# add module labels
+PairwiseDiffs_wModLabels <-
+  lapply(names(Mod_means_pairwisediffs_df), function(x) { 
+    Mod_means_pairwisediffs_df[[x]]$Module <- x;return(Mod_means_pairwisediffs_df[[x]])})
+
+# combine into 1 dataframe
+All_PairwiseDiffs <- do.call("rbind", PairwiseDiffs_wModLabels)
+colnames(All_PairwiseDiffs) <- c("Difference", "Difference_SE", "Difference_p", "Contrast", "Module")
+
+# wide format
+All_PairwiseDiffs_wide <- reshape(All_PairwiseDiffs, idvar = "Module", timevar = "Contrast",
+                             direction = "wide")
+
+##############################
+## COMBINE AND SAVE RESULTS ##
+##############################
+
+# df to save:
+#Anova_results, All_ModMeans_wide, All_PairwiseDiffs_wide
+
+LM_Results <- merge(Anova_results, merge(All_ModMeans_wide, All_PairwiseDiffs_wide, by="Module"),
+                     by="Module")
+
+# save
+write.csv(LM_Results, file = "ResultsFiles/Coexpression/Module_Anova.csv", row.names = FALSE)
+
+##############################
+### LS MEANS PER ACCESSION ###
+##############################
+
+
+
+##############################
+###### HIGHEST F VALUES ######
+##############################
+
+
+LR_highestF <- lapply (LR_mod_ANOVA, function(x) {rownames(x[which(x$`F value` == 
+                                                         max(na.omit(x$`F value`))),])})
+
+length(which(LR_highestF=="Osmocote")) #40
+length(which(LR_highestF=="Accession")) #7 (34 additional which will be removed due to high R^2 for accession)
+length(which(LR_highestF=="Salt")) #4
+length(which(LR_highestF=="Bench")) #1 (MEgreen)
+length(which(LR_highestF=="Osmocote:Salt")) #2 (salmon, greenyellow)
+length(which(LR_highestF=="Osmocote:Accession")) #0
+length(which(LR_highestF=="Salt:Accession")) #0
+length(which(LR_highestF=="Osmocote:Salt:Accession ")) #0
 
 
