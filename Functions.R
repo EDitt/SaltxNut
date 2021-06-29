@@ -360,6 +360,24 @@ Module_Trait_Corr <- function(TraitData, model, modEigenvalues, NumSamples) {
   return(result)
 }
 
+# Function to plot raw data as a barplot
+base_barplot <- function(var1, module_name){
+  barplot(var1, main = module_name)
+}
+
+# Function to correct p-values using the Holm or Hochberg procedure
+Holm_Hochberg <- function(pvals_column, df){
+  pOrder <- df[order(df[,pvals_column], decreasing = FALSE),
+               c("Module", pvals_column)]
+  colnames(pOrder) <- c("Module", "Pvals")
+  pOrder$Order <- seq(1,length(pOrder$Module), by=1)
+  N <- length(pOrder$Module)
+  pOrder$alpha <- 0.05 / (N - pOrder$Order + 1)
+  pOrder$Sig <- ifelse(pOrder$Pvals < pOrder$alpha,
+                         "Significant", "N.S.")
+  return(pOrder)
+}
+
 #########################
 ##### GO ENRICHMENT #####
 #########################
