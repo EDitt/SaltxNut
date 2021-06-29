@@ -12,7 +12,7 @@ library(UpSetR)
 LM_Results <- read.csv("ResultsFiles/Coexpression/Module_Anova.csv", header=T) # 88 modules
 
 ## R^2 categories for simple models:
-load(ResultsFiles/Coexpression/QC/Module_RsquaredCats.RData)
+load("ResultsFiles/Coexpression/QC/Module_RsquaredCats.RData")
 
 # # Will remove modules with R^2 values higher than 0.95 in models with Accession as only explanatory factor
 LM_ResultsSub <- LM_Results[which(!LM_Results$Module %in% ModuleRsquaredList$AccessionR2_more95),] # now 54 modules
@@ -207,9 +207,31 @@ save(SigModOverlap, DE_Overlaps, SigDiffOverlap,
      file="ResultsFiles/Coexpression/LR_SigModOverlap.RData")
 
 ############################
-# PLOT SIGNIFICANT MODULES #
+### INTERESTING MODULES ###
 ############################
 
+### Shared responses:
+
+# are there any modules that are DE in all & have no significant pairwise differences?
+AllSigDiffs <- union(Combo_Nut_sig, union(Combo_Salt_sig, Salt_Nut_sig))
+
+setdiff(DE_Overlaps$InCommonAll, AllSigDiffs) # blue2, darkorange2, mediumpurple2, salmon: All have significant model effects Nutrient + Nut x Salt
+# blue2/darkorange2/salmon are all more highly correlated with each other than mediumpurple2
+
+# what pairwise responses are present?
+lapply(SigDiffOverlap, function(x) {intersect(x, DE_Overlaps$InCommonAll)})
+
+### Nutrient responses that are not affected by the presence of salt:
+#Nut_unconditional <- 
+setdiff(DE_Overlaps$DE_Combo_sigDE_Nut_sigOnly, Combo_Nut_sig) # only 1: yellow4 (nutrient main effect significant)
+
+### Nutrient responses that *are* affected by the presence of salt:
+intersect(DE_Overlaps$DE_Combo_sigDE_Nut_sigOnly, Combo_Nut_sig) # N=14
+
+### Salt responses not affected by nutrients:
+setdiff(DE_Overlaps$DE_Combo_sigDE_Salt_sigOnly, Combo_Salt_sig) # 1: lightcyan1 (only salt/combo one)
+intersect(DE_Overlaps$DE_Combo_sigDE_Salt_sigOnly, Combo_Salt_sig) # none-
+intersect(DE_Overlaps$DE_Salt_sigOnly, Combo_Salt_sig)  # greenyellow (black is the other one)
 
 
 
