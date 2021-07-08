@@ -41,6 +41,22 @@ levels(Design$Reproductive)
 ## samples per accssion:
 aggregate(Design$Plant, by=list(Design$Accession, Design$Treatment), length)
 
+#########################
+# EXPRESSION AND EIGENGENES #
+#########################
+
+bisque_dat <- cbind.data.frame(ModExp$MEbisque4, ModEGs$MEbisque4)
+colnames(bisque_dat) <- c("Ave Expression", "Eigengene")
+
+plot(bisque_dat$Eigengene ~ bisque_dat$`Ave Expression`,
+     xlim=c(-0.5, 1.5), ylim=c(-0.5, 1.5))
+abline(a=0, b=1, lty=2)
+
+brown_dat <- cbind.data.frame(ModExp$MEbrown, ModEGs$MEbrown)
+colnames(brown_dat) <- c("Ave Expression", "Eigengene")
+
+plot(brown_dat$Eigengene ~ brown_dat$`Ave Expression`)
+abline(a=0, b=1, lty=2)
 
 #########################
 ###### DATA SETUP #######
@@ -65,10 +81,10 @@ write.csv(AllData, file="ResultsFiles/Coexpression/Module_EGs.csv", row.names = 
 LR_Mod <- function(Yvar, dataset) {
   mod <- lm(Yvar ~ Osmocote + Salt +
                 Osmocote:Salt +
-                Accession +
-                Osmocote:Accession +
-                Salt:Accession +
-                Osmocote:Salt:Accession +
+                Group + Group:Accession +
+                Osmocote:Group +
+                Salt:Group +
+                Osmocote:Salt:Group +
                 Bench, data = dataset,
               contrast=list(Accession=contr.sum, Bench=contr.sum))
   return(mod)
@@ -91,7 +107,7 @@ LR_mod_ANOVA <- lapply (LR_mod_results, function(x) {as.data.frame(Anova(x, test
 ##############################
 
 # select relevant info (F values & p values for factors of interest)
-Anova_columns <- lapply(LR_mod_ANOVA, function(x) {x[c(1:3,5),c(3,4)]})
+Anova_columns <- lapply(LR_mod_ANOVA, function(x) {x[c(1:3,5,6),c(3,4)]})
 #Anova_columns <- lapply(LR_mod_ANOVA, function(x) {cbind(rownames(x[c(1:3,5),]), 
 #                                                         x[c(1:3,5),c(3,4)])})
 
@@ -107,14 +123,14 @@ Anova_Fvals <- lapply(Anova_widewLabels, function(x) {x[1,]})
 
 #combine into 1 df
 All_Fvals <- do.call("rbind", Anova_Fvals)
-colnames(All_Fvals) <- c("Nut_F", "Salt_F", "Accession_F", "NutxSalt_F", "Module")
+colnames(All_Fvals) <- c("Nut_F", "Salt_F", "Group_F", "NutxSalt_F", "GroupxAccession_F", "Module")
 
 # p values
 Anova_pvals <- lapply(Anova_widewLabels, function(x) {x[2,]})
 
 #combine into 1 df
 All_pvals <- do.call("rbind", Anova_pvals)
-colnames(All_pvals) <- c("Nut_p", "Salt_p", "Accession_p", "NutxSalt_p", "Module")
+colnames(All_pvals) <- c("Nut_p", "Salt_p", "Group_p", "NutxSalt_p", "GroupxAccession_p", "Module")
 
 # merge
 Anova_results <- merge(All_Fvals, All_pvals, by="Module")
@@ -124,8 +140,13 @@ Anova_results <- merge(All_Fvals, All_pvals, by="Module")
 ##############################
 
 # going to calculate for all modules
+#Mod_means <- lapply (LR_mod_results, 
+#                             function(x) {emmeans(x, ~ Osmocote*Salt, type = "response")})
+
+# calculate means for each treatment x accession
 Mod_means <- lapply (LR_mod_results, 
-                             function(x) {emmeans(x, ~ Osmocote*Salt, type = "response")})
+                     function(x) {emmeans(x, ~ Osmocote*Salt | Group, type = "response")})
+
 # dataframe of all the means
 Mod_means_df <- lapply(Mod_means, function(x) {as.data.frame(x)[,c(1:4)]})
 
@@ -148,8 +169,11 @@ All_ModMeans$Treatment <- ifelse(All_ModMeans$Osmocote == "High" &
 aggregate(All_ModMeans$Module, by=list(All_ModMeans$Osmocote,
                                        All_ModMeans$Salt, All_ModMeans$Treatment), length)
 
+# new column for Treatment x Group
+All_ModMeans$TreatmentGroup <- paste0(All_ModMeans$Group, "_", All_ModMeans$Treatment)
+
 # wide format
-All_ModMeans_wide <- reshape(All_ModMeans[,c(3:6)], idvar = "Module", timevar = "Treatment",
+All_ModMeans_wide <- reshape(All_ModMeans[,c(4,5,7)], idvar = "Module", timevar = "TreatmentGroup",
                              direction = "wide")
 
 
@@ -162,10 +186,13 @@ Mod_means_pairwisediffs <- lapply (Mod_means,
 
 # better contrast labels
 Contrast_labels <- c("DE_Nut", "DE_Salt", "DE_Combo", "Nut-Salt", "Nut-Combo", "Salt-Combo")
+Groups <- c("HA", "RHA")
+newdf <- expand.grid(Contrast_labels, Groups)
+Both_labs <- paste0(newdf$Var2, "_", newdf$Var1)
 
 # dataframe of pairwise diffs
 Mod_means_pairwisediffs_df <- lapply(Mod_means_pairwisediffs, function(x) {
-  cbind(as.data.frame(x)[,c(2,3,6)], Contrast_labels)})
+  cbind(as.data.frame(x)[,c(3,7)], Both_labs)})
 
 # add module labels
 PairwiseDiffs_wModLabels <-
@@ -174,7 +201,7 @@ PairwiseDiffs_wModLabels <-
 
 # combine into 1 dataframe
 All_PairwiseDiffs <- do.call("rbind", PairwiseDiffs_wModLabels)
-colnames(All_PairwiseDiffs) <- c("Difference", "Difference_SE", "Difference_p", "Contrast", "Module")
+colnames(All_PairwiseDiffs) <- c("Difference", "Difference_p", "Contrast", "Module")
 
 # wide format
 All_PairwiseDiffs_wide <- reshape(All_PairwiseDiffs, idvar = "Module", timevar = "Contrast",
