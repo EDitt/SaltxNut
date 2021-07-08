@@ -69,6 +69,23 @@ Mod_AGBG_init <- lm(AG.BG ~ Accession + Plate + Tray,
              data=initial_inbred)
 drop1(Mod_AGBG_init, test = "F")
 emmeans(Mod_AGBG_init, ~Accession)
+emmeans(Mod_AGBG_init, ~1) # overall mean
+
+# initial root mass fraction
+initial_inbred_sub <- subset(initial_inbred, Accession != "SAM 206" &
+                               Accession != "SAM 227")
+initial_inbred_sub$Accession <- droplevels(initial_inbred_sub$Accession)
+initial_inbred_sub$RMF <- initial_inbred_sub$BelowGround_Biomass / initial_inbred_sub$Tot_biomass
+hist(initial_inbred_sub$RMF)
+
+Mod_RMF_init <- lm(RMF ~ Accession + Plate + Tray,
+                    data=initial_inbred_sub)
+drop1(Mod_RMF_init, test = "F")
+emmeans(Mod_RMF_init, ~Accession)
+Mean_InitRMF <- emmeans(Mod_RMF_init, ~1) 
+
+# raw mean:
+mean(na.omit(initial_inbred_sub$RMF))
 
 ############################
 ###### SET UP FULL DF ######
@@ -154,11 +171,14 @@ Means_RGR <- emmeans(Mod_RGR, ~Accession:Treatment) # by accession
 Means_RGR <- emmeans(Mod_RGR, ~Hybrid_role|Treatment)
 pairs(Means_RGR) # only significant in Low nutrient (p=0.0157)
 
+Mean_RGR <- emmeans(Mod_RGR, ~Treatment) # overall mean
+aggregate(full_inbred_sub$RGR_new, by=list(full_inbred_sub$Treatment), mean, na.rm=TRUE) # check against raw means
+
 # plot raw data
 rgr_plot_raw <- ggplot(full_inbred_sub, aes(y=RGR_new, x=Treatment, fill=Hybrid_role))
 rgr_plot_raw + geom_boxplot()
 
-# plot lsmeans
+# plot lsmeans by heterotic group
 rgr_plot <- ggplot(as.data.frame(Means_RGR), aes(y=emmean, x=Treatment, group=Hybrid_role))
 rgr_plot + geom_bar(stat = "identity", position = position_dodge())
 rgr_plot + geom_point(stat = "identity", aes(color=Hybrid_role, shape=Hybrid_role),
@@ -172,7 +192,19 @@ rgr_plot + geom_point(stat = "identity", aes(color=Hybrid_role, shape=Hybrid_rol
   scale_linetype_discrete(name="", breaks=c("Female", "Male"), labels=c("HA", "RHA")) +
   guides(fill=guide_legend(title=NULL)) +
   theme_minimal() + ylab("Relative Growth Rate")
-ggsave("/Users/emilydittmar/Google Drive/Active Projects/Transcriptomics_Exp/Analyses/Figures/RGR.png")
+
+#ggsave("/Users/emilydittmar/Google Drive/Active Projects/Transcriptomics_Exp/Analyses/Figures/RGR.png")
+
+# plot overall means for each treatment
+rgr_plot <- ggplot(as.data.frame(Mean_RGR), aes(y=emmean, x=Treatment, group=1))
+rgr_plot + 
+  geom_point(stat = "identity", position=position_dodge(width = 0.2), size=4) +
+  geom_line(stat = "identity", position=position_dodge(width = 0.2), linetype = "dashed") +
+  geom_errorbar(aes(ymin=emmean-SE, ymax=emmean+SE), width=.2,
+                position=position_dodge(width = 0.2)) +
+  theme_minimal() + ylab("Relative Growth Rate")
+
+ggsave("/Users/emilydittmar/Google Drive/Active Projects/Transcriptomics_Exp/Manuscript/SaltxNut/Figures/RGR.png")
 
 ############################
 ######## AG BIOMASS ########
@@ -291,6 +323,7 @@ AG_BG_long <- gather(AG_BG_Means, Measurement, Value, Mean_AG, Mean_BG, factor_k
 ############################
 ## AG/BG BIOMASS LSMEANS ###
 ############################
+
 Mod_AG.BG <- PhenotypeMod(full_inbred_sub, full_inbred_sub$AG_BG)
 drop1(Mod_AG.BG, test = "F") # bench, mold, hybrid role x accession, hybrid role x treatment (p=0.1)
 Anova(Mod_AG.BG, test = "F") # hybrid role, Treatment also
@@ -331,6 +364,46 @@ ag.bg_plot2 + geom_point(stat = "identity", size=4) +
   geom_errorbar(aes(ymin=emmean-SE, ymax=emmean+SE), width=.2)
 
 ############################
+#### ROOT MASS FRACTIONS ###
+############################
+
+# belowground / total biomass
+# Aboveground/Belowground biomass
+full_inbred_sub$RootMassFrac <- full_inbred_sub$Tot_BG / full_inbred_sub$Tot_Biomass
+hist(full_inbred_sub$RootMassFrac)
+
+# plot raw
+plot(full_inbred_sub$RootMassFrac ~ full_inbred_sub$Treatment)
+
+Mod_RMF <- PhenotypeMod(full_inbred_sub, full_inbred_sub$RootMassFrac)
+drop1(Mod_RMF, test = "F") # mold, hybrid role x accession
+Anova(Mod_RMF, test = "F")
+summary(Mod_RMF)
+hist(resid(Mod_RMF))
+plot(Mod_RMF)
+
+Means_RMF <- emmeans(Mod_RMF, ~Treatment)
+pairs(Means_RMF) # no sig. differences
+
+# check raw mean
+aggregate(full_inbred_sub$RootMassFrac, by=list(full_inbred_sub$Treatment), mean, na.rm = TRUE)
+
+# least square means for initial
+InitialRMF <- as.data.frame(Mean_InitRMF)
+
+# plot means for each treatment
+RMFplot <- ggplot(as.data.frame(Means_RMF), aes(y=emmean, x=Treatment, group=1))
+RMFplot + geom_point(stat = "identity", size=4) +
+  geom_line(stat = "identity", linetype = "dashed") +
+  geom_errorbar(aes(ymin=emmean-SE, ymax=emmean+SE), width=.2) +
+  theme_minimal() + ylab("Root Mass Fraction") 
+
+# + geom_hline(yintercept = InitialRMF$emmean) # initial is much higher than all
+
+ggsave("/Users/emilydittmar/Google Drive/Active Projects/Transcriptomics_Exp/Manuscript/SaltxNut/Figures/RMF.png")
+
+
+############################
 ######## CHLOROPHYLL #######
 ############################
 
@@ -344,12 +417,17 @@ plot(Mod_Ch)
 Means_Ch <- emmeans(Mod_Ch, ~Hybrid_role|Treatment)
 pairs(Means_Ch) # no sig. differences (in LowNut p-value=0.08)
 
+# overall means
+Mean_Ch <- emmeans(Mod_Ch, ~Treatment)
+
+# compare to raw means
+aggregate(full_inbred_sub$Chlorophyll, by=list(full_inbred_sub$Treatment), mean, na.rm=T)
+
 # plot raw data
 ch_plot_raw <- ggplot(full_inbred_sub, aes(y=Chlorophyll, x=Treatment, fill=Hybrid_role))
 ch_plot_raw <- ggplot(full_inbred_sub, aes(y=Chlorophyll, x=Treatment, fill=Accession))
 ch_plot_raw <- ggplot(full_inbred_sub, aes(y=Chlorophyll, x=Treatment))
 ch_plot_raw + geom_boxplot(outlier.shape = NA)
-
 
 # plot lsmeans
 ch_plot <- ggplot(as.data.frame(Means_Ch), aes(y=emmean, x=Treatment, group=Hybrid_role))
@@ -365,6 +443,16 @@ ch_plot + geom_point(stat = "identity", aes(color=Hybrid_role, shape=Hybrid_role
   guides(fill=guide_legend(title=NULL)) +
   theme_minimal() + ylab("Chlorophyll")
 ggsave("/Users/emilydittmar/Google Drive/Active Projects/Transcriptomics_Exp/Analyses/Figures/Chlorophyll.png")
+
+# plot overall lsmeans per treatment
+ch_plot <- ggplot(as.data.frame(Mean_Ch), aes(y=emmean, x=Treatment, group=1))
+ch_plot + geom_point(stat = "identity", size=4) +
+  geom_line(stat = "identity", linetype="dashed") +
+  geom_errorbar(aes(ymin=emmean-SE, ymax=emmean+SE), width=.2,
+                position=position_dodge(width = 0.2)) +
+  theme_minimal() + ylab("Chlorophyll")
+
+ggsave("/Users/emilydittmar/Google Drive/Active Projects/Transcriptomics_Exp/Manuscript/SaltxNut/Figures/Chlorophyll.png")
 
 #########################
 ####### CALC SLA ########
@@ -401,6 +489,7 @@ pheno_sla_sub$Hybrid_role <- droplevels(pheno_sla_sub$Hybrid_role)
 levels(pheno_sla_sub$Hybrid_role)
 aggregate(pheno_sla_sub$Plant., by=list(pheno_sla_sub$Hybrid_role,
                                         pheno_sla_sub$Accession), length) # check
+hist(pheno_sla_sub$SLA)
 
 
 # is chlorophyll related to SLA?
@@ -431,6 +520,10 @@ Means_sla <- emmeans(Mod_sla, ~Hybrid_role|Treatment)
 #Means_sla <- emmeans(Mod_sla, ~Treatment|Hybrid_role)
 pairs(Means_sla) # not sig. different
 
+# overall mean across treatments
+Mean_sla <- emmeans(Mod_sla, ~Treatment)
+aggregate(pheno_sla_sub$SLA, by=list(pheno_sla_sub$Treatment), mean, na.rm=T)
+
 # plot lsmeans
 sla_plot <- ggplot(as.data.frame(Means_sla), aes(y=emmean, x=Treatment, group=Hybrid_role))
 sla_plot + geom_point(stat = "identity", aes(color=Hybrid_role, shape=Hybrid_role),
@@ -447,7 +540,15 @@ sla_plot + geom_point(stat = "identity", aes(color=Hybrid_role, shape=Hybrid_rol
 
 ggsave("/Users/emilydittmar/Google Drive/Active Projects/Transcriptomics_Exp/Analyses/Figures/SLA.png")
 
+# plot lsmeans for treatment
+sla_plot <- ggplot(as.data.frame(Mean_sla), aes(y=emmean, x=Treatment, group=1))
+sla_plot + geom_point(stat = "identity", size=4) +
+  geom_line(stat = "identity", linetype="dashed") +
+  geom_errorbar(aes(ymin=emmean-SE, ymax=emmean+SE), width=.2,
+                position=position_dodge(width = 0.2)) +
+  theme_minimal() + ylab("Specific Leaf Area")
 
+ggsave("/Users/emilydittmar/Google Drive/Active Projects/Transcriptomics_Exp/Manuscript/SaltxNut/Figures/SLA.png")
 
 ########## old code:
 
