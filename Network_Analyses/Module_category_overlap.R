@@ -7,6 +7,7 @@
 source("Functions.R")
 library(tidyr)
 library(UpSetR)
+library(ggfortify)
 
 # load ANOVA results
 LM_Results <- read.csv("ResultsFiles/Coexpression/Module_Anova.csv", header=T) # 88 modules
@@ -22,6 +23,7 @@ LM_ResultsSub <- LM_Results[which(!LM_Results$Module %in% ModuleRsquaredList$Acc
 ##############################
 
 critp <- 0.05/length(LM_ResultsSub$Module)
+#critp <- 0.05/length(LM_Results$Module)
 
 ### modules that are significant for Nutrient Main Effect:
 LR_Nut_Sig <- LM_ResultsSub[which(LM_ResultsSub$Nut_p < critp), "Module"] #40 (52 before removing 34 modules)
@@ -30,19 +32,19 @@ LR_Nut_Sig <- LM_ResultsSub[which(LM_ResultsSub$Nut_p < critp), "Module"] #40 (5
 LR_Salt_Sig <- LM_ResultsSub[which(LM_ResultsSub$Salt_p < critp), "Module"] #15
 
 ### modules that are significant for Nut x Salt Interaction:
-LR_NutxSalt_Sig <- LM_ResultsSub[which(LM_ResultsSub$NutxSalt_p < critp), "Module"] #26
+LR_NutxSalt_Sig <- LM_ResultsSub[which(LM_ResultsSub$NutxSalt_p < critp), "Module"] #27
 
 VennNumbers(LR_Nut_Sig, LR_Salt_Sig, LR_NutxSalt_Sig)
 # 6 sig for all
 # 7 Nut & Salt Main Effects
-# 0 Salt & Nut x Salt
+# 1 Salt & Nut x Salt
 # 19 Nut & Nut x Salt
 # 8 Nut (was 20 before removing 34 modules from dataset)
-# 2 Salt
+# 1 Salt
 # 1 NutxSalt
 
 ### modules that are significant for Accession:
-LR_Accession_Sig <- LM_ResultsSub[which(LM_ResultsSub$Accession_p < critp), "Module"] #29 (was 62 before removing 34 modules)
+LR_Accession_Sig <- LM_ResultsSub[which(LM_ResultsSub$GroupxAccession_p < critp), "Module"] #30 (was 62 before removing 34 modules)
 
 ######
 ### modules that are significant for Bench: (changed code & did not keep this factor in spreadsheet)
@@ -100,9 +102,6 @@ critp2 <- 0.05/length(AllSigTreatMods)
 # sidak correction 
 critp2 <- 1-(1-0.05)^(1/length(AllSigTreatMods)) # 0.00119
 
-# take only modules for which there are significant treatment effects
-LM_Results_Sig <- LM_ResultsSub[which(LM_ResultsSub$Module %in%
-                                        AllSigTreatMods),]
 # different power for Nutrient and Salt (diff distribution of p-values)
 
 # Holm's Step-Down Procedure
@@ -117,65 +116,59 @@ SaltDE_Sig <- Holm_Hochberg("Difference_p.DE_Salt", LM_Results_Sig)
 # SIG MODULES BY PAIRWISE DIFFS #
 #################################
 
-# Differences between Nutrient and Control
-#DE_Nut_sig <- LM_Results_Sig[which(LM_Results_Sig$Difference_p.DE_Nut < critp2),"Module"] #38 (was 43)
-#DE_Nut_sig <- LM_Results_Sig[which(LM_Results_Sig$Difference_p.DE_Nut < 0.05),"Module"] #41
-DE_Nut_sig <- LM_Results_Sig[which(LM_Results_Sig$Difference_p.DE_Nut < 0.01),"Module"] #40
+# take only modules for which there are significant treatment effects
+LM_Results_Sig <- LM_ResultsSub[which(LM_ResultsSub$Module %in%
+                                         AllSigTreatMods),]
 
-# Differences between Salt and Control
-#DE_Salt_sig <- LM_Results_Sig[which(LM_Results_Sig$Difference_p.DE_Salt < critp2),"Module"] #10
-#DE_Salt_sig <- LM_Results_Sig[which(LM_Results_Sig$Difference_p.DE_Salt < 0.05),"Module"] #24
-DE_Salt_sig <- LM_Results_Sig[which(LM_Results_Sig$Difference_p.DE_Salt < 0.01),"Module"] #18
+# check that p-value is significant for HA & RHA AND they are in the same direction
+SigDiff <- function(Df, Treatment, Pcol, Pcrit){
+   #meanColumnHA <- paste0("emmean.HA_", Treatment)
+   #meanColumnRHA <- paste0("emmean.RHA_", Treatment)
+   meanColumnHA <- paste0("Difference.HA_", Treatment)
+   meanColumnRHA <- paste0("Difference.RHA_", Treatment)
+   pColumnHA <- paste0("Difference_p.HA_", Pcol)
+   pColumnRHA <- paste0("Difference_p.RHA_", Pcol)
+   SameDir <- Df[which((Df[,meanColumnHA] > 0 &
+                           Df[,meanColumnRHA] > 0) |
+                          (Df[,meanColumnHA] < 0 &
+                              Df[,meanColumnRHA] < 0)), "Module"]
+   Sig <- Df[which(Df[,pColumnHA] < Pcrit &
+                      Df[,pColumnRHA] < Pcrit),"Module"]
+   DE_sig <- intersect(Sig, SameDir)
+   return(DE_sig)
+}
 
-# Differences between Combo and Control
-#DE_Combo_sig <- LM_Results_Sig[which(LM_Results_Sig$Difference_p.DE_Combo < critp2),"Module"] #25
-#DE_Combo_sig <- LM_Results_Sig[which(LM_Results_Sig$Difference_p.DE_Combo < 0.05),"Module"] #32
-DE_Combo_sig <- LM_Results_Sig[which(LM_Results_Sig$Difference_p.DE_Combo < 0.01),"Module"] #28
 
-length(union(DE_Combo_sig, union(DE_Salt_sig, DE_Nut_sig))) #41 (#43 with p=0.05 & p=0.01)
+DE_Salt_sig <- SigDiff(LM_Results_Sig, "DE_Salt", "DE_Salt", 0.05) #7
+DE_Nut_sig <- SigDiff(LM_Results_Sig, "DE_Nut", "DE_Nut", 0.05) #33 (31 at p=0.01)
+DE_Combo_sig <- SigDiff(LM_Results_Sig, "DE_Combo", "DE_Combo", 0.05) #17 (7 at p=0.01)
+
+
+length(union(DE_Combo_sig, union(DE_Salt_sig, DE_Nut_sig))) #35
 
 DE_Overlaps <- GeneSets(DE_Combo_sig,
                         DE_Salt_sig,
                         DE_Nut_sig)
 lapply(DE_Overlaps, function(x) {length(x)})
 
-# in common all: 6 (was 18)
-# combo-salt only: 1 (was 0)
-# salt-nut only: 1 (was 4)
-# combo-nut only: 18 (was 22)
-# combo only: 0 (was 0)
-# salt only: 2 (was 2)
-# nut only: 13 (was 9)
-
-# for p=0.05
-# in common all: 18
-# combo-salt only: 0
-# salt-nut only: 4
-# combo-nut only: 14
-# combo only: 0
-# salt only: 2
-# nut only: 5
-
-# for p=0.01
-# in common all: 12
+# in common all: 1
 # combo-salt only: 1
-# salt-nut only: 3
-# combo-nut only: 15
+# salt-nut only: 1
+# combo-nut only: 9
 # combo only: 0
-# salt only: 2
-# nut only: 10
-
-### use p < 0.01
+# salt only: 1 
+# nut only: 22
 
 ##############################
 ##### DIFF B/W TREATMENTS ####
 ##############################
 
-Salt_Nut_sig <- LM_Results_Sig[which(LM_Results_Sig$Difference_p.Nut.Salt < 0.01),"Module"] #37
 
-Combo_Nut_sig <- LM_Results_Sig[which(LM_Results_Sig$Difference_p.Nut.Combo < 0.01),"Module"] #30
+Salt_Nut_sig <- SigDiff(LM_Results_Sig, "Nut.Salt", "Nut.Salt", 0.05) #27
 
-Combo_Salt_sig <- LM_Results_Sig[which(LM_Results_Sig$Difference_p.Salt.Combo < 0.01),"Module"] #20
+Combo_Nut_sig <- SigDiff(LM_Results_Sig, "Nut.Combo","Nut.Combo", 0.05) #15
+
+Combo_Salt_sig <- SigDiff(LM_Results_Sig, "Salt.Combo", "Salt.Combo", 0.05) #2
 
 lm_list <- list(Nut = DE_Nut_sig, 
                 Salt = DE_Salt_sig, 
@@ -200,7 +193,7 @@ SigDiffOverlap <- GeneSets(Combo_Nut_sig, Combo_Salt_sig, Salt_Nut_sig)
 ############################
 
 AllSigMods <- union(DE_Combo_sig, union(DE_Salt_sig, DE_Nut_sig))
-length(AllSigMods) # 43
+length(AllSigMods) # 35
 
 save(SigModOverlap, DE_Overlaps, SigDiffOverlap, 
      LR_list, lm_list, DE_Combo_sig, DE_Salt_sig, DE_Nut_sig,
@@ -215,23 +208,152 @@ save(SigModOverlap, DE_Overlaps, SigDiffOverlap,
 # are there any modules that are DE in all & have no significant pairwise differences?
 AllSigDiffs <- union(Combo_Nut_sig, union(Combo_Salt_sig, Salt_Nut_sig))
 
-setdiff(DE_Overlaps$InCommonAll, AllSigDiffs) # blue2, darkorange2, mediumpurple2, salmon: All have significant model effects Nutrient + Nut x Salt
-# blue2/darkorange2/salmon are all more highly correlated with each other than mediumpurple2
+setdiff(DE_Overlaps$InCommonAll, AllSigDiffs) 
+# blue
 
 # what pairwise responses are present?
-lapply(SigDiffOverlap, function(x) {intersect(x, DE_Overlaps$InCommonAll)})
+lapply(SigDiffOverlap, function(x) {intersect(x, DE_Overlaps$InCommonAll)}) # none
 
 ### Nutrient responses that are not affected by the presence of salt:
 #Nut_unconditional <- 
-setdiff(DE_Overlaps$DE_Combo_sigDE_Nut_sigOnly, Combo_Nut_sig) # only 1: yellow4 (nutrient main effect significant)
+setdiff(DE_Overlaps$DE_Combo_sigDE_Nut_sigOnly, Combo_Nut_sig) 
+# 7: darkorange, darkorange2, mediumpurple2, orangered3, orangered4, skyblue3
+# (out of 13)
 
 ### Nutrient responses that *are* affected by the presence of salt:
-intersect(DE_Overlaps$DE_Combo_sigDE_Nut_sigOnly, Combo_Nut_sig) # N=14
+intersect(DE_Overlaps$DE_Combo_sigDE_Nut_sigOnly, Combo_Nut_sig) # N=2
 
 ### Salt responses not affected by nutrients:
 setdiff(DE_Overlaps$DE_Combo_sigDE_Salt_sigOnly, Combo_Salt_sig) # 1: lightcyan1 (only salt/combo one)
 intersect(DE_Overlaps$DE_Combo_sigDE_Salt_sigOnly, Combo_Salt_sig) # none-
-intersect(DE_Overlaps$DE_Salt_sigOnly, Combo_Salt_sig)  # greenyellow (black is the other one)
+intersect(DE_Overlaps$DE_Salt_sigOnly, Combo_Salt_sig)  # none
+
+### antagonistic effects
+intersect(DE_Overlaps$DE_Salt_sigDE_Nut_sigOnly, Salt_Nut_sig) # plum1
+
+
+############################
+# PCA OF SIGNIFICANT MODS ##
+############################
+
+# load eigengenes
+ModEGs <- read.csv("ResultsFiles/Coexpression/Module_EGs.csv", header=T)
+ModEGs$Treatment <- factor(ModEGs$Treatment, levels=c("Control", "LowNut", "HighSalt", "Combo"))
+levels(ModEGs$Treatment)
+
+pca <- prcomp(ModEGs[,AllSigTreatMods], center = TRUE, scale. = TRUE)
+summary(pca) # PC1=43.91%, PC2=15.10%
+
+autoplot(pca, data=ModEGs, 
+         colour='Treatment', shape='Accession', frame = TRUE) +
+   scale_fill_manual(values = c("#4DAF4A", "#E41A1C", "#E6AB02", "#377EB8")) +
+   scale_colour_manual(values = c("#4DAF4A", "#E41A1C", "#E6AB02", "#377EB8")) +
+   theme_minimal()
+ggsave("/Users/emilydittmar/Google Drive/Active Projects/Transcriptomics_Exp/Manuscript/SaltxNut/Figures/ModsPCA.png")
+
+
+############################
+######### BARPLOT ##########
+############################
+
+#my_dataSig <- lapply(colnames(LM_Results_Sig[,c(21,23,25,27,29,31,33,35,37,39,41,43)]), 
+#                     function(x) {SigDEdf(LM_Results_Sig, PvaluesCol=x, CritP=0.05)})
+#names(my_dataSig) <- colnames(LM_Results_Sig[,c(21,23,25,27,29,31,33,35,37,39,41,43)])
+
+# unchanged nutrient-combo
+Nut_Uncond <- setdiff(DE_Overlaps$DE_Combo_sigDE_Nut_sigOnly, Combo_Nut_sig) #7
+# no longer significant
+Nut_Cond_NS <- DE_Overlaps$DE_Nut_sigOnly #22
+
+# conditional
+Nut_Cond <- intersect(DE_Overlaps$DE_Combo_sigDE_Nut_sigOnly, Combo_Nut_sig) #2
+# combo is reduced relative to nutrient
+Nut_Cond_reduced <- intersect(Nut_Cond,
+                             LM_Results_Sig[which(abs(LM_Results_Sig$Difference.HA_DE_Nut) >
+                                                           abs(LM_Results_Sig$Difference.HA_DE_Combo)), "Module"]) # 2
+Nut_Cond_increased <- intersect(Nut_Cond,
+                             LM_Results_Sig[which(abs(LM_Results_Sig$Difference.HA_DE_Nut) <
+                                                     abs(LM_Results_Sig$Difference.HA_DE_Combo)), "Module"]) #0
+Nut_Cond_opposite <- setdiff(Nut_Cond, union(Nut_Cond_reduced, Nut_Cond_increased)) #0
+
+# unchanged nutrient-combo
+Salt_Uncond <- setdiff(DE_Overlaps$DE_Combo_sigDE_Salt_sigOnly, Combo_Salt_sig) #1
+# no longer significant
+Salt_Cond_NS <- DE_Overlaps$DE_Salt_sigOnly #1
+# salt conditional
+Salt_Cond <- intersect(DE_Overlaps$DE_Combo_sigDE_Salt_sigOnly, Combo_Salt_sig) #0
+
+### shared responses
+Nut_Unspec_Uncond <- setdiff(DE_Overlaps$InCommonAll, Combo_Nut_sig)
+Salt_Unspec_Uncond <- setdiff(DE_Overlaps$InCommonAll, Combo_Salt_sig)
+
+### Salt-Nut onkly
+Nut_Unspec_NS <- DE_Overlaps$DE_Salt_sigDE_Nut_sigOnly
+Salt_Unspec_NS <- DE_Overlaps$DE_Salt_sigDE_Nut_sigOnly
+
+### make df
+Labels <- c("Unchanged", "Decreased_mag",
+            "Increased_mag", "Opposite_dir", "Not_DE")
+NutSpecificDf <- data.frame(Labels, "Number" = c(length(Nut_Uncond),
+                                                            length(Nut_Cond_reduced),
+                                                            length(Nut_Cond_increased),
+                                                            length(Nut_Cond_opposite),
+                                                            length(Nut_Cond_NS)))
+NutSpecificDf$Category <- "Nut_specific"
+NutUnSpecificDf <- data.frame(Labels, "Number" = c(length(Nut_Unspec_Uncond),
+                                                 0,
+                                                 0,
+                                                 0,
+                                                 length(Nut_Unspec_NS)))
+NutUnSpecificDf$Category <- "Nut_Unspecific"
+
+SaltSpecificDf <- data.frame(Labels, "Number" = c(length(Salt_Uncond),
+                                                 0,
+                                                 0,
+                                                 0,
+                                                 length(Salt_Cond_NS)))
+SaltSpecificDf$Category <- "Salt_specific"
+
+SaltUnSpecificDf <- data.frame(Labels, "Number" = c(length(Salt_Unspec_Uncond),
+                                                   0,
+                                                   0,
+                                                   0,
+                                                   length(Salt_Unspec_NS)))
+SaltUnSpecificDf$Category <- "Salt_Unspecific"
+
+
+df_all_full <- rbind(NutSpecificDf, NutUnSpecificDf,
+                     SaltSpecificDf, SaltUnSpecificDf,
+                     make.row.names=FALSE)
+df_all_full$Category <- factor(df_all_full$Category, levels=c("Nut_specific",
+                                                              "Nut_Unspecific",
+                                                              "Salt_Unspecific",
+                                                              "Salt_specific"))
+
+Opposite_col <- c("olivedrab4")
+Unchanged_col <- c("#4A6990FF") #periwinkle blue
+Increased_col <- c("#A73030FF")
+Decreased_col <- c("#EFC000FF")
+NotDE_col <- c("grey55")
+
+str(df_all)
+
+all_p <- ggplot(df_all_full, aes(fill=Labels, y=Number, x=Category))
+all_p + geom_bar(position="stack", stat="identity", color="black", size=0.2) +
+   ylab("Number of Modules") +
+   scale_fill_manual(values=c(Unchanged_col, Decreased_col, Increased_col,
+                              Opposite_col, NotDE_col),
+                     name="Addition of Second Stress",
+                     breaks=c("Unchanged", "Decreased_mag",
+                              "Increased_mag", "Opposite_dir", "Not_DE"),
+                     labels=c("Un-changed",
+                              "Decreased Magnitude", "Increased Magnitude",
+                              "Opposite Direction", "No Longer Differentially Expressed")) +
+   theme_bw(base_size = 14)
+
+ggsave("/Users/emilydittmar/Google Drive/Active Projects/Transcriptomics_Exp/Manuscript/SaltxNut/Figures/Modsbarplot.png")
+ggsave("/Users/eld72413/Google Drive/Active Projects/Transcriptomics_Exp/Manuscript/SaltxNut/Figures/Modsbarplot.png")
+
 
 
 
