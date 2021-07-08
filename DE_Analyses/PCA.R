@@ -13,11 +13,12 @@ library(matrixStats)
 library(ggfortify)
 library(ggplot2)
 
-setwd("/scratch/eld72413/Salty_Nut/CultivatedOnly/DE_Analyses_Inbred")
+#setwd("/scratch/eld72413/Salty_Nut/CultivatedOnly/DE_Analyses_Inbred")
 
 library( "genefilter" ) #no package?
 library("gplots")
 library("RColorBrewer")
+library("viridis")
 
 #########################
 ######### DATA ##########
@@ -82,6 +83,32 @@ autoplot(pca_res3, data=Matrix_data,
 #,frame.type = 'norm')
 
 ggsave("/Users/emilydittmar/Google Drive/Active Projects/Transcriptomics_Exp/Analyses/Figures/Inbred_PCA.png")
+
+# customize color scheme
+Matrix_data$Treatment <- factor(Matrix_data$Treatment, levels=c("Control", "LowNut", "HighSalt", "Combo"))
+levels(Matrix_data$Treatment)
+
+display.brewer.pal(n=8, name = "Spectral") # 1,4,
+display.brewer.pal(n=8, name = "Dark2") 
+brewer.pal(n=8, name = "Dark2")
+viridis(8)
+display.brewer.pal(n=8, name = "Set1") 
+brewer.pal(n=8, name = "Set1")
+
+# dark2 colors
+autoplot(pca_res3, data=Matrix_data, 
+         colour='Treatment', shape='Accession', frame = TRUE) +
+  scale_fill_manual(values = c("#1B9E77", "#D95F02", "#E6AB02", "#7570B3")) +
+  scale_colour_manual(values = c("#1B9E77", "#D95F02", "#E6AB02", "#7570B3")) +
+  theme_minimal()
+
+# set1 colors with dark2 yellow for salt
+autoplot(pca_res3, data=Matrix_data, 
+         colour='Treatment', shape='Accession', frame = TRUE) +
+  scale_fill_manual(values = c("#4DAF4A", "#E41A1C", "#E6AB02", "#377EB8")) +
+  scale_colour_manual(values = c("#4DAF4A", "#E41A1C", "#E6AB02", "#377EB8")) +
+  theme_minimal()
+ggsave("/Users/emilydittmar/Google Drive/Active Projects/Transcriptomics_Exp/Manuscript/SaltxNut/Figures/PCA.png")
 
 plotMDS(SigGenes_Mat_Transform, labels = design$Treatment) # need deseq2
 
