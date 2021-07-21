@@ -140,12 +140,8 @@ Anova_results <- merge(All_Fvals, All_pvals, by="Module")
 ##############################
 
 # going to calculate for all modules
-#Mod_means <- lapply (LR_mod_results, 
-#                             function(x) {emmeans(x, ~ Osmocote*Salt, type = "response")})
-
-# calculate means for each treatment x accession
 Mod_means <- lapply (LR_mod_results, 
-                     function(x) {emmeans(x, ~ Osmocote*Salt | Group, type = "response")})
+                             function(x) {emmeans(x, ~ Osmocote*Salt, type = "response")})
 
 # dataframe of all the means
 Mod_means_df <- lapply(Mod_means, function(x) {as.data.frame(x)[,c(1:4)]})
@@ -169,13 +165,8 @@ All_ModMeans$Treatment <- ifelse(All_ModMeans$Osmocote == "High" &
 aggregate(All_ModMeans$Module, by=list(All_ModMeans$Osmocote,
                                        All_ModMeans$Salt, All_ModMeans$Treatment), length)
 
-# new column for Treatment x Group
-All_ModMeans$TreatmentGroup <- paste0(All_ModMeans$Group, "_", All_ModMeans$Treatment)
-
-# wide format
-All_ModMeans_wide <- reshape(All_ModMeans[,c(4,5,7)], idvar = "Module", timevar = "TreatmentGroup",
+All_ModMeans_wide <- reshape(All_ModMeans[,c(3:6)], idvar = "Module", timevar = "Treatment",
                              direction = "wide")
-
 
 ##############################
 ###### PAIRWISE DIFFS ########
@@ -186,13 +177,15 @@ Mod_means_pairwisediffs <- lapply (Mod_means,
 
 # better contrast labels
 Contrast_labels <- c("DE_Nut", "DE_Salt", "DE_Combo", "Nut-Salt", "Nut-Combo", "Salt-Combo")
-Groups <- c("HA", "RHA")
-newdf <- expand.grid(Contrast_labels, Groups)
-Both_labs <- paste0(newdf$Var2, "_", newdf$Var1)
+#Groups <- c("HA", "RHA")
+#newdf <- expand.grid(Contrast_labels, Groups)
+#Both_labs <- paste0(newdf$Var2, "_", newdf$Var1)
 
 # dataframe of pairwise diffs
+#Mod_means_pairwisediffs_df <- lapply(Mod_means_pairwisediffs, function(x) {
+#  cbind(as.data.frame(x)[,c(3,7)], Both_labs)})
 Mod_means_pairwisediffs_df <- lapply(Mod_means_pairwisediffs, function(x) {
-  cbind(as.data.frame(x)[,c(3,7)], Both_labs)})
+  cbind(as.data.frame(x)[,c(2,6)], Contrast_labels)})
 
 # add module labels
 PairwiseDiffs_wModLabels <-
@@ -221,10 +214,39 @@ LM_Results <- merge(Anova_results, merge(All_ModMeans_wide, All_PairwiseDiffs_wi
 write.csv(LM_Results, file = "ResultsFiles/Coexpression/Module_Anova.csv", row.names = FALSE)
 
 ##############################
-### LS MEANS PER ACCESSION ###
+##### LS MEANS PER GROUP #####
 ##############################
 
+# calculate means for each treatment x group
+Mod_meansperGroup <- lapply (LR_mod_results, 
+                   function(x) {emmeans(x, ~ Osmocote*Salt | Group, type = "response")})
 
+# dataframe of all the means
+Mod_meansGroup_df <- lapply(Mod_meansperGroup, function(x) {as.data.frame(x)[,c(1:5)]})
+
+Mod_meansGroupLabels <-
+  lapply(names(Mod_meansGroup_df), function(x) { Mod_meansGroup_df[[x]]$Module <- x;return(Mod_meansGroup_df[[x]])})
+
+All_ModMeansGroup <- do.call("rbind", Mod_meansGroupLabels)
+
+# add treatment column
+All_ModMeansGroup$Treatment <- ifelse(All_ModMeansGroup$Osmocote == "High" &
+                                        All_ModMeansGroup$Salt == "NoSalt",
+                                 "Control", ifelse(All_ModMeansGroup$Osmocote == "High" &
+                                                     All_ModMeansGroup$Salt == "Salt",
+                                                   "Salt", ifelse(All_ModMeansGroup$Osmocote == "Low" &
+                                                                    All_ModMeansGroup$Salt == "NoSalt",
+                                                                  "LowNut", "Combo")))
+
+# new column for Treatment x Group
+All_ModMeansGroup$TreatmentGroup <- paste0(All_ModMeansGroup$Group, "_", All_ModMeansGroup$Treatment)
+
+# wide format
+All_ModMeansGroup_wide <- reshape(All_ModMeansGroup[,c(4:6,8)], idvar = "Module", timevar = "TreatmentGroup",
+                           direction = "wide")
+
+write.csv(All_ModMeansGroup_wide, 
+          file = "ResultsFiles/Coexpression/EmmeanTreatGroup.csv", row.names = FALSE)
 
 ##############################
 ###### HIGHEST F VALUES ######

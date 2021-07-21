@@ -139,18 +139,31 @@ SigDiff <- function(Df, Treatment, Pcol, Pcrit){
 }
 
 
-DE_Salt_sig <- SigDiff(LM_Results_Sig, "DE_Salt", "DE_Salt", 0.05) #7
-DE_Nut_sig <- SigDiff(LM_Results_Sig, "DE_Nut", "DE_Nut", 0.05) #33 (31 at p=0.01)
-DE_Combo_sig <- SigDiff(LM_Results_Sig, "DE_Combo", "DE_Combo", 0.05) #17 (7 at p=0.01)
+#DE_Salt_sig <- SigDiff(LM_Results_Sig, "DE_Salt", "DE_Salt", 0.05) #7
+#DE_Nut_sig <- SigDiff(LM_Results_Sig, "DE_Nut", "DE_Nut", 0.05) #33 (31 at p=0.01)
+#DE_Combo_sig <- SigDiff(LM_Results_Sig, "DE_Combo", "DE_Combo", 0.05) #17 (7 at p=0.01)
 
+DE_Salt_sig <- LM_Results_Sig[which(LM_Results_Sig$Difference_p.DE_Salt < 0.01), "Module"]
+DE_Nut_sig <- LM_Results_Sig[which(LM_Results_Sig$Difference_p.DE_Nut < 0.01), "Module"]
+DE_Combo_sig <- LM_Results_Sig[which(LM_Results_Sig$Difference_p.DE_Combo < 0.01), "Module"]
 
-length(union(DE_Combo_sig, union(DE_Salt_sig, DE_Nut_sig))) #35
+length(union(DE_Combo_sig, union(DE_Salt_sig, DE_Nut_sig))) #43
 
 DE_Overlaps <- GeneSets(DE_Combo_sig,
                         DE_Salt_sig,
                         DE_Nut_sig)
 lapply(DE_Overlaps, function(x) {length(x)})
 
+# lsmeans across groups
+# in common all: 17
+# combo-salt only: 1
+# salt-nut only: 5
+# combo-nut only: 15
+# combo only: 0
+# salt only: 1
+# nut only: 4
+
+# requiring same patterns in HA & RHA
 # in common all: 1
 # combo-salt only: 1
 # salt-nut only: 1
@@ -164,11 +177,13 @@ lapply(DE_Overlaps, function(x) {length(x)})
 ##############################
 
 
-Salt_Nut_sig <- SigDiff(LM_Results_Sig, "Nut.Salt", "Nut.Salt", 0.05) #27
+#Salt_Nut_sig <- SigDiff(LM_Results_Sig, "Nut.Salt", "Nut.Salt", 0.05) #27
+#Combo_Nut_sig <- SigDiff(LM_Results_Sig, "Nut.Combo","Nut.Combo", 0.05) #15
+#Combo_Salt_sig <- SigDiff(LM_Results_Sig, "Salt.Combo", "Salt.Combo", 0.05) #2
 
-Combo_Nut_sig <- SigDiff(LM_Results_Sig, "Nut.Combo","Nut.Combo", 0.05) #15
-
-Combo_Salt_sig <- SigDiff(LM_Results_Sig, "Salt.Combo", "Salt.Combo", 0.05) #2
+Salt_Nut_sig <- LM_Results_Sig[which(LM_Results_Sig$Difference_p.Nut.Salt < 0.01), "Module"] #37
+Combo_Nut_sig <- LM_Results_Sig[which(LM_Results_Sig$Difference_p.Nut.Combo < 0.01), "Module"] #30
+Combo_Salt_sig <- LM_Results_Sig[which(LM_Results_Sig$Difference_p.Salt.Combo < 0.01), "Module"] #21
 
 lm_list <- list(Nut = DE_Nut_sig, 
                 Salt = DE_Salt_sig, 
@@ -193,7 +208,7 @@ SigDiffOverlap <- GeneSets(Combo_Nut_sig, Combo_Salt_sig, Salt_Nut_sig)
 ############################
 
 AllSigMods <- union(DE_Combo_sig, union(DE_Salt_sig, DE_Nut_sig))
-length(AllSigMods) # 35
+length(AllSigMods) # 43
 
 save(SigModOverlap, DE_Overlaps, SigDiffOverlap, 
      LR_list, lm_list, DE_Combo_sig, DE_Salt_sig, DE_Nut_sig,
@@ -209,24 +224,25 @@ save(SigModOverlap, DE_Overlaps, SigDiffOverlap,
 AllSigDiffs <- union(Combo_Nut_sig, union(Combo_Salt_sig, Salt_Nut_sig))
 
 setdiff(DE_Overlaps$InCommonAll, AllSigDiffs) 
-# blue
+# blue2, darkorange2, mediumpurple2, salmon
 
 # what pairwise responses are present?
-lapply(SigDiffOverlap, function(x) {intersect(x, DE_Overlaps$InCommonAll)}) # none
+lapply(SigDiffOverlap, function(x) {intersect(x, DE_Overlaps$InCommonAll)}) 
+# in common all: antiquewhite2, blue, cyan, floralwhite, orangered3
+# nut-salt only: lightcyan1, orangered4, skyblue4, white
 
 ### Nutrient responses that are not affected by the presence of salt:
 #Nut_unconditional <- 
 setdiff(DE_Overlaps$DE_Combo_sigDE_Nut_sigOnly, Combo_Nut_sig) 
-# 7: darkorange, darkorange2, mediumpurple2, orangered3, orangered4, skyblue3
-# (out of 13)
+# yellow4
 
 ### Nutrient responses that *are* affected by the presence of salt:
-intersect(DE_Overlaps$DE_Combo_sigDE_Nut_sigOnly, Combo_Nut_sig) # N=2
+intersect(DE_Overlaps$DE_Combo_sigDE_Nut_sigOnly, Combo_Nut_sig) # N=14
 
-### Salt responses not affected by nutrients:
-setdiff(DE_Overlaps$DE_Combo_sigDE_Salt_sigOnly, Combo_Salt_sig) # 1: lightcyan1 (only salt/combo one)
-intersect(DE_Overlaps$DE_Combo_sigDE_Salt_sigOnly, Combo_Salt_sig) # none-
-intersect(DE_Overlaps$DE_Salt_sigOnly, Combo_Salt_sig)  # none
+### Salt responses not affected by nutrients: no combo-salt only modules
+setdiff(DE_Overlaps$DE_Combo_sigDE_Salt_sigOnly, Combo_Salt_sig) # 0
+intersect(DE_Overlaps$DE_Combo_sigDE_Salt_sigOnly, Combo_Salt_sig) # 0
+intersect(DE_Overlaps$DE_Salt_sigOnly, Combo_Salt_sig)  # greenyellow (other module is black)
 
 ### antagonistic effects
 intersect(DE_Overlaps$DE_Salt_sigDE_Nut_sigOnly, Salt_Nut_sig) # plum1
@@ -360,6 +376,8 @@ ggsave("/Users/eld72413/Google Drive/Active Projects/Transcriptomics_Exp/Manuscr
 ######## Plot raw data
 AllData_ordered <- AllData[order(AllData$Treatment, AllData$Accession, decreasing = FALSE),]
 barplot(AllData_ordered$MEwhite, names.arg = AllData_ordered$Treatment)
+barplot(AllData_ordered$MEgreenyellow, names.arg = AllData_ordered$Treatment)
+
 
 ######### Scratch
 
