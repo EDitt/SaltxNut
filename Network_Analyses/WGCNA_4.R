@@ -64,6 +64,134 @@ table(moduleLabels)
 
 write.csv(info, file = "Gene_ModuleMembership.csv", row.names = FALSE, quote = FALSE)
 
+################################
+## MODULE MEMBERSHIP CONSENSUS #
+################################
+
+# discovered functions: hierarchicalConsensusKME and consensusKME for calculating consensus module membership
+
+# tmux new -s wgcna #lm0006
+# srun -N 1 -n 1 -c 1 --mem=50gb -t 12:00:00 -p interactive --pty bash
+# module load R/3.6.0
+# cd /scratch.old/edittmar/WGCNA # msi changed global scratch path
+# R
+
+setwd("/scratch.old/edittmar/WGCNA")
+
+library(WGCNA)
+options(stringsAsFactors = FALSE)
+enableWGCNAThreads()
+
+load("Consensus-NetworkConstruction-man.RData")
+# objects: consMEs, moduleLabels, consTree
+length(moduleLabels)
+
+load("multiExpr.RData")
+nSets = checkSets(multiExpr)$nSets
+
+setLabels = c("HA", "RHA")
+
+HierConKME <- consensusKME(
+multiExpr,
+moduleLabels,
+multiEigengenes = NULL,
+consensusQuantile = 0,
+signed = TRUE,
+useModules = NULL,
+metaAnalysisWeights = NULL,
+corAndPvalueFnc = corAndPvalue, corOptions = list(), corComponent = "cor",
+getQvalues = FALSE,
+useRankPvalue = TRUE,
+#rankPvalueOptions = list(calculateQvalue = getQvalues, pValueMethod = "scale"),
+setNames = setLabels,
+excludeGrey = TRUE,
+greyLabel = if (is.numeric(moduleLabels)) 0 else "grey")
+
+dim(HierConKME)
+head(colnames(HierConKME))
+ConskME <- HierConKME # not a hierarchical consensus
+save(ConskME, file = "/panfs/roc/groups/9/morrellp/shared/Projects/Sunflower/Consensus_kME.RData")
+
+# save df of relevant info:
+colnames(ConskME)[1:20]
+Modules <- unique(moduleLabels)
+
+### kME values
+consensusCols <- c(paste0("consensus.kME", Modules))
+Mod_kMEs <- ConskME [names(ConskME) %in% consensusCols]
+Mod_kMEs$ID <- row.names(Mod_kMEs)
+write.csv(Mod_kMEs, "/panfs/roc/groups/9/morrellp/shared/Projects/Sunflower/Module_kMEs.csv",
+	row.names=FALSE)
+
+### p values
+pvalCols <- c(paste0("meta.p.equalWeights.kME", Modules))
+Mod_pVals <- ConskME [names(ConskME) %in% pvalCols]
+Mod_pVals$ID <- row.names(Mod_pVals)
+write.csv(Mod_pVals, "/panfs/roc/groups/9/morrellp/shared/Projects/Sunflower/Module_kME_Pvals.csv",
+	row.names=FALSE)
+
+
+################ couldn't get hierarchical consensus kME functions to work
+
+#consTree$labels = c(colnames(multiExpr[[1]]$data))
+
+consOptions <- newConsensusOptions(
+calibration = "single quantile",
+# Simple quantile scaling options
+calibrationQuantile = 0.95,
+sampleForCalibration = TRUE,
+sampleForCalibrationFactor = 1000,
+# Consensus definition
+consensusQuantile = 0,
+useMean = FALSE,
+setWeights = NULL,
+suppressNegativeResults = FALSE,
+# Name to prevent files clashes
+analysisName = "new")
+
+consTree_new <- newConsensusTree(
+	consTree)
+
+######
+HierConKME <- hierarchicalConsensusKME(
+multiExpr,
+moduleLabels,
+multiWeights = NULL,
+multiEigengenes = NULL,
+consTree,
+signed = TRUE,
+useModules = NULL,
+metaAnalysisWeights = NULL,
+corAndPvalueFnc = corAndPvalue, corOptions = list(),
+corComponent = "cor", getFDR = FALSE,
+useRankPvalue = TRUE,
+rankPvalueOptions = list(calculateQvalue = getFDR, pValueMethod = "scale"),
+setNames = setLabels, excludeGrey = TRUE,
+greyLabel = if (is.numeric(moduleLabels)) 0 else "grey",
+reportWeightType = NULL,
+getOwnModuleZ = TRUE,
+getBestModuleZ = TRUE,
+getOwnConsensusKME = TRUE,
+getBestConsensusKME = TRUE,
+getAverageKME = TRUE,
+getConsensusKME = TRUE,
+getMetaColsFor1Set = FALSE,
+getMetaP = FALSE,
+getMetaFDR = getMetaP && getFDR,
+getSetKME = TRUE,
+getSetZ = FALSE,
+getSetP = FALSE,
+getSetFDR = getSetP && getFDR,
+includeID = TRUE,
+additionalGeneInfo = NULL,
+includeWeightTypeInColnames = TRUE)
+
+#Error in names(consensusTree$inputs) <- spaste("Level.", level, ".Input.",  : 
+#  attempt to set an attribute on NULL
+
+
+
+
 #############################
 ##### GENE CONNECTIVITY #####
 #############################
