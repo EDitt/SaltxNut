@@ -20,7 +20,7 @@ AllData <- read.csv("ResultsFiles/Coexpression/Module_EGs.csv", header = T)
 AllData$Treatment <- factor(AllData$Treatment, levels=c("Control", "LowNut", "HighSalt", "Combo"))
 levels(AllData$Treatment)
 AllData$Accession <- as.factor(make.names(AllData$Accession))
-levels(Design$Accession)
+levels(AllData$Accession)
 
 # load ANOVA results
 LM_Results <- read.csv("ResultsFiles/Coexpression/Module_Anova.csv", header=T) # 88 modules
