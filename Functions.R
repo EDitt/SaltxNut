@@ -378,6 +378,20 @@ Holm_Hochberg <- function(pvals_column, df){
   return(pOrder)
 }
 
+# summarize connectivity for all genes in each module
+ConnectivitySummary <- function(Yvar, Group, YvarLabel) {
+  NumGenes <- aggregate(Yvar, by=list(Group), length)
+  mean <- aggregate(Yvar, by=list(Group), mean)
+  sd <- aggregate(Yvar, by=list(Group), sd)
+  SummaryStats <- merge(NumGenes, 
+                        merge(mean, sd, by="Group.1"), 
+                        by="Group.1")
+  colnames(SummaryStats) <- c("ModuleColor", "NumGenes", paste0(YvarLabel,"_Mean"), paste0(YvarLabel,"_SD"))
+  SummaryStats[,paste0(YvarLabel, "_SE")] <- SummaryStats[,paste0(YvarLabel,"_SD")] / (sqrt(SummaryStats$NumGenes))
+  SummaryStats$Module <- paste0("ME", SummaryStats$ModuleColor)
+  return(SummaryStats)
+}
+
 #########################
 ##### GO ENRICHMENT #####
 #########################
@@ -398,4 +412,51 @@ GO_Enrichment <- function (AllGenes, DE_Genes, LengthTable, GO_Terms) {
   enriched.GO=GO.wall$category[p.adjust(GO.wall$over_represented_pvalue, method="BH")<.05]
   enrichedGO_table <- GO.wall[is.element(GO.wall$category, enriched.GO),]
   return(enrichedGO_table)
+}
+
+#########################
+### PLOTTING MODULES ####
+#########################
+
+# this function plots the overall lsmeans in each treatment for each module
+Plot_ModOverallMeans <- function(ModuleName, dataframe, color, title){
+  means <- as.data.frame(t(dataframe[which(dataframe$Module==ModuleName),c("Module", 
+                                                                           "emmean.Control", "emmean.LowNut",
+                                                                           "emmean.Salt", "emmean.Combo")]))
+  se <- as.data.frame(t(dataframe[which(dataframe$Module==ModuleName),c("Module", "SE.Control",
+                                                                        "SE.LowNut", "SE.Salt", "SE.Combo")]))
+  pvals <- as.data.frame(t(dataframe[which(dataframe$Module==ModuleName),c("Module", "Difference_p.DE_Nut",
+                                                                           "Difference_p.DE_Salt","Difference_p.DE_Combo")]))
+  Mod_df <- data.frame(Treatment=c("Control", "Nutrient", "Salt", "Combo"), 
+                       DE=as.numeric(means[2:5,1]),
+                       SE=as.numeric(se[2:5,1]),
+                       pval=as.numeric(c(NA, pvals[2:4,1])))
+  Mod_df$Treatment <- factor(Mod_df$Treatment, levels=c("Control", "Nutrient", "Salt", "Combo"))
+  Mod_df$plabs <- ifelse(Mod_df$pval < 0.0001, "***",
+                         ifelse(Mod_df$pval < 0.001, "**",
+                                ifelse(Mod_df$pval < 0.01, "*",
+                                       ifelse(Mod_df$pval == "NA", "NA",
+                                              paste0("p=",round(Mod_df$pval, digits=2))))))
+  scale <- abs(max(Mod_df$DE) - min(Mod_df$DE))
+  Mod_df$plabPositions <- ifelse(Mod_df$pval < 0.01,
+                                 Mod_df$DE + sign(Mod_df$DE) * Mod_df$SE +
+                                   sign(Mod_df$DE) * (scale/8),              
+                                 Mod_df$DE + sign(Mod_df$DE) * Mod_df$SE +
+                                   sign(Mod_df$DE) * (scale/5))
+  ymin <- min(Mod_df$DE) - (2*max(Mod_df$SE) + (scale/5))
+  #ymin <- min(Mod_df$DE) - scale/5
+  ymin_plot <- ifelse(ymin > 0, 0, ymin)
+  ymax <- max(Mod_df$DE) + (2*max(Mod_df$SE) + (scale/5))
+  #ymax <- max(Mod_df$DE) + scale/5
+  ymax_plot <- ifelse(ymax < 0, 0, ymax)
+  p <- ggplot(data = Mod_df, aes(x=Treatment, y=DE)) +
+    geom_bar(stat="identity", fill=color, alpha=0.7, color="black") +
+    geom_errorbar(aes(ymin=DE-SE, ymax=DE+SE), width=0.05) +
+    #geom_linerange(aes(ymin=DE-SE, ymax=DE+SE)) +
+    theme_minimal() +
+    ggtitle(title) +
+    geom_text(aes(label=plabs, y=plabPositions)) +
+    #vjust="outward") +
+    ylim(ymin_plot, ymax_plot)
+  return(p)
 }
