@@ -229,6 +229,10 @@ length(All_shared) #2627
 Cats <- list(One_stress_specific, All_shared)
 names(Cats) <- c("One_stress_specific", "All_shared")
 
+### to compare to other datasets (e.g. Heliaphen):
+write.table(SigOverlap$InCommonAll$Gene, file="/Volumes/GoogleDrive/My Drive/Active Projects/Transcriptomics_Exp/Results/ToCompare/AllStress.txt", quote=FALSE, row.names = FALSE) # N=5032
+write.table(All_shared, file= "/Volumes/GoogleDrive/My Drive/Active Projects/Transcriptomics_Exp/Results/ToCompare/AllStress_Same.txt", quote=FALSE, row.names = FALSE) # N=2627
+
 #########################
 #### SAVE CATEGORIES ####
 #########################
